@@ -45,6 +45,7 @@
 #define N3DS_TOP_SCREEN_H 240
 
 extern u32 __ctru_heap_size;
+u32 __ctru_linear_heap_size = 20u * 1024u * 1024u;
 
 void N3DSLog_init(void);
 void N3DSLog_close(void);
