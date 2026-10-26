@@ -68,7 +68,7 @@ static inline bool Renderer_isFiniteFloat(float v) { return isfinite(v); }
 // whose pages don't fit re-import ten of them every few frames (a 14 ms hitch each time).
 #define N3DS_ATLAS_LINEAR_RESERVE_BYTES (3u * 1024u * 1024u)
 #define N3DS_ATLAS_IDLE_FRAMES 60u
-#define N3DS_MAX_CACHED_T3X_BYTES_OLD3DS (16u * 1024u * 1024u)
+#define N3DS_MAX_CACHED_T3X_BYTES_OLD3DS (8u * 1024u * 1024u)
 #define N3DS_MAX_CACHED_T3X_BYTES_NEW3DS (32u * 1024u * 1024u)
 // Sprite read-ahead: when a sprite frame is drawn, the pages of its next frames are read in the background.
 #define N3DS_READAHEAD_FRAMES 4
