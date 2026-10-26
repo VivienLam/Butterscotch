@@ -49,7 +49,9 @@
 #define N3DS_ENABLE_STREAM_WORKER 1
 #define N3DS_EAGER_SFX_PRELOAD 0
 #define N3DS_MAX_PRELOADED_SFX_BYTES_NEW3DS (15u * 1024u * 1024u)
-#define N3DS_MAX_PRELOADED_SFX_BYTES_OLD3DS (15u * 1024u * 1024u)
+// Old 3DS: the heap is ~44 MB and the game itself uses ~37 MB of it by the first room; 15 MB of cached sounds
+// (and an 11 MB music file read whole before the cap was checked) crashed it. Music streams anyway.
+#define N3DS_MAX_PRELOADED_SFX_BYTES_OLD3DS (3u * 1024u * 1024u)
 #define N3DS_ROOM_PREWARM_SOUND_COUNT_NEW3DS 2u
 #define N3DS_ROOM_PREWARM_BYTE_BUDGET_NEW3DS (192u * 1024u)
 #define N3DS_BACKGROUND_PREWARM_SOUND_COUNT_NEW3DS 0u
@@ -337,7 +339,14 @@ static void N3DSAudio_configureFileBuffer(FILE* file) {
     setvbuf(file, NULL, _IOFBF, N3DS_AUDIO_FILE_BUFFER_SIZE);
 }
 
-static bool N3DSAudio_readFileFully(const char* path, uint8_t** outData, uint32_t* outSize) {
+static uint32_t N3DSAudio_cacheRoomLeft(const struct N3DSAudioSystem* audio) {
+    uint32_t used = audio->cachedSoundBytes;
+    return used >= audio->maxCachedSoundBytes ? 0u : audio->maxCachedSoundBytes - used;
+}
+
+// maxSize: files larger than this are not read at all (returns false), so a file that would not fit the sound cache
+// never costs a whole-file allocation first.
+static bool N3DSAudio_readFileFully(const char* path, uint8_t** outData, uint32_t* outSize, uint32_t maxSize) {
     *outData = NULL;
     *outSize = 0;
 
@@ -348,7 +357,7 @@ static bool N3DSAudio_readFileFully(const char* path, uint8_t** outData, uint32_
     fseek(file, 0, SEEK_END);
     long size = ftell(file);
     fseek(file, 0, SEEK_SET);
-    if (size <= 0) {
+    if (size <= 0 || (uint32_t) size > maxSize) {
         fclose(file);
         return false;
     }
@@ -1392,7 +1401,7 @@ static bool N3DSAudio_tryCacheSoundBlob(N3DSAudioSystem* audio, int32_t soundInd
 
     uint8_t* blob = NULL;
     uint32_t blobSize = 0;
-    if (!N3DSAudio_readFileFully(path, &blob, &blobSize)) {
+    if (!N3DSAudio_readFileFully(path, &blob, &blobSize, N3DSAudio_cacheRoomLeft(audio))) {
         free(path);
         return false;
     }
@@ -2656,7 +2665,7 @@ static bool N3DSAudio_runCachePrewarmJob(N3DSAudioSystem* audio) {
         }
 
         if (path != NULL &&
-            N3DSAudio_readFileFully(path, &blob, &blobSize) &&
+            N3DSAudio_readFileFully(path, &blob, &blobSize, N3DSAudio_cacheRoomLeft(audio)) &&
             N3DSAudio_parseBcwavBlob(blob, blobSize, &bcwav) &&
             N3DSAudio_shouldPrewarmCachedSound(sound, &bcwav)) {
             loaded = true;

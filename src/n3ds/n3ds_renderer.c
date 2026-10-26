@@ -59,7 +59,8 @@ static inline bool Renderer_isFiniteFloat(float v) { return isfinite(v); }
 #define N3DS_PREWARM_GPU_PAGE_BUDGET_NEW3DS 32u
 #define N3DS_PREWARM_GPU_PAGE_BUDGET_OLD3DS_ETC1A4 20u
 #define N3DS_PREWARM_GPU_PAGE_BUDGET_NEW3DS_ETC1A4 48u
-#define N3DS_PREWARM_BLOB_BYTES_OLD3DS (8u * 1024u * 1024u)
+// Old 3DS: room prewarm reads into the page-data cache (8 MB there); keep it to half so a room change can't fill it.
+#define N3DS_PREWARM_BLOB_BYTES_OLD3DS (4u * 1024u * 1024u)
 #define N3DS_PREWARM_BLOB_BYTES_NEW3DS (12u * 1024u * 1024u)
 #define N3DS_RESIDENT_ATLAS_VRAM_BUDGET_OLD3DS (2560u * 1024u)
 #define N3DS_RESIDENT_ATLAS_VRAM_BUDGET_NEW3DS (5120u * 1024u)
