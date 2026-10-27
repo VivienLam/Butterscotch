@@ -1443,6 +1443,15 @@ int loop(CommandLineArgs args, const char *argv0) {
                 Runner_drawPost(runner, fbWidth, fbHeight);
                 renderer->vtable->endFrameEnd(renderer);
                 Runner_drawGUI(runner, fbWidth, fbHeight, gameW, gameH);
+#ifdef BS_AM2R_NATIVES_HOST
+                // BS_FPSREAL=<n>: fixed fps_real, so bench runs don't depend on wall time (AM2R culls offscreen
+                // bubbles when fps_real < 60, which made natives off/on diverge on timing alone).
+                {
+                    static double fixedFpsReal = -1.0;
+                    if (fixedFpsReal < 0.0) fixedFpsReal = getenv("BS_FPSREAL") != NULL ? atof(getenv("BS_FPSREAL")) : 0.0;
+                    if (fixedFpsReal > 0.0) runner->fpsReal = fixedFpsReal;
+                }
+#endif
 
                 if (showDebugOverlay && renderer->vtable->drawTextUI != nullptr) {
                     renderer->vtable->beginGUI(renderer, fbWidth, fbHeight, 0, 0, fbWidth, fbHeight, RENDER_TARGET_HOST_FRAMEBUFFER);

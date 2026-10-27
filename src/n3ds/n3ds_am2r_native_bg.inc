@@ -75,3 +75,27 @@ static bool native_oBackground_Draw_0(MAYBE_UNUSED Runner* runner, Instance* sel
     setNum(self, &v_i, (GMLReal) count); // the game's loop variable (an instance variable) ends at bgno
     return true;
 }
+
+// AM2R 1.5.5's oTitleAnimation Draw: draw_sprite(sTitleAnimated, subim, -53, -bgyoff). The title background is 60
+// frames of 426x640, two 512 KB texture pages each: on the Old 3DS every frame change reads 1 MB from the SD card and
+// uploads it (70-200 ms), which made the title menu run at 20 fps with hitches. There the first frame is kept (the
+// background still scrolls); its two pages stay resident. The New 3DS keeps the animation.
+VAR(bgyoff);
+static int32_t gSprTitleAnimated = -1;
+static int8_t gTitleStill = -1;
+
+static bool native_oTitleAnimation_Draw_0(MAYBE_UNUSED Runner* runner, Instance* self) {
+    if (gTitleStill < 0) {
+#ifdef __3DS__
+        bool isNew3DS = false;
+        APT_CheckNew3DS(&isNew3DS);
+        gTitleStill = isNew3DS ? 0 : 1;
+#else
+        gTitleStill = getenv("BS_TITLE_ANIM") != NULL ? 0 : 1;
+#endif
+    }
+    GMLReal bgyoff;
+    if (!gTitleStill || gSprTitleAnimated < 0 || !num(self, &v_bgyoff, &bgyoff)) return false;
+    drawSprite(gSprTitleAnimated, 0, -53, -bgyoff);
+    return true;
+}

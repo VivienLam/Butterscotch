@@ -13,7 +13,12 @@
 
 #include <stb/ds/stb_ds.h>
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
+#ifdef __3DS__
+// libctru's (Result is an s32); its header isn't pulled in here.
+extern int32_t APT_CheckNew3DS(bool* out);
+#endif
 
 // Each native below follows the game's bytecode instruction for instruction (the disassembly it was written from is
 // quoted in its comment where the order matters): the same values read, the same variables written (with the same
@@ -745,6 +750,7 @@ static NativeEntry gEntries[] = {
     { "platformCharacterIs", native_platformCharacterIs, NULL, 0, -1, false },
     { "check_keys", native_check_keys, NULL, 0, -1, false },
     { "gml_Object_oBackground_Draw_0", NULL, native_oBackground_Draw_0, 0, -1, false },
+    { "gml_Object_oTitleAnimation_Draw_0", NULL, native_oTitleAnimation_Draw_0, 0, -1, false },
 };
 #define N_ENTRIES ((int32_t) (sizeof(gEntries) / sizeof(gEntries[0])))
 
@@ -811,6 +817,7 @@ void N3DSAm2rNative_init(Runner* runner) {
     N.drawBackgroundExt = builtin("draw_background_ext");
     N.keyboardCheck = builtin("keyboard_check");
     gDrawBackgroundTiledExt = builtin("draw_background_tiled_ext");
+    gSprTitleAnimated = N3DSGml_spriteIndex("sTitleAnimated");
     N.gamepadButtonCheck = builtin("gamepad_button_check");
     N.gamepadIsSupported = builtin("gamepad_is_supported");
     N.gamepadIsConnected = builtin("gamepad_is_connected");
@@ -876,7 +883,7 @@ void N3DSAm2rNative_init(Runner* runner) {
         resolveVar(&v_keybtn[k]);
         if (v_joybtn[k].name != NULL) resolveVar(&v_joybtn[k]);
     }
-    Var* bgVars[] = { &v_bgno, &v_bgid, &v_tile, &v_xratio, &v_yratio, &v_yoff, &v_xscale, &v_yscale, &v_alpha };
+    Var* bgVars[] = { &v_bgno, &v_bgid, &v_tile, &v_xratio, &v_yratio, &v_yoff, &v_xscale, &v_yscale, &v_alpha, &v_bgyoff };
     for (size_t k = 0; k < sizeof(bgVars) / sizeof(bgVars[0]); k++) resolveVar(bgVars[k]);
     Var* inputVars[] = { &v_walk_zone, &v_xjoyx, &v_xjoyy, &v_controltype, &v_opaimstyle, &v_gamepadIndex, &v_opxjoyenable,
         &v_opxjoyvib, &v_vibL, &v_vibR, &v_opxjoydz, &v_joydetected, &v_openablejoy };

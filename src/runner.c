@@ -4112,6 +4112,7 @@ static void dispatchCollisionEvents(Runner* runner) {
 
                 if (0 > evt->codeId)
                     continue;
+                if (!self->active) break;
 
                 // Iterate only the descendant-inclusive list for the target object via a snapshot, so nested user code (collision handlers calling instance_exists, with (...), etc.) can push/pop their own snapshots above ours without corrupting this iteration.
                 int32_t snapBase = Runner_pushInstancesOfObject(runner, targetObjIndex);
@@ -4121,6 +4122,10 @@ static void dispatchCollisionEvents(Runner* runner) {
                 qsort(runner->instanceSnapshots + snapBase, snapEnd - snapBase, sizeof(Instance*), sortInstancesByObjectIndexThenInstanceIdAscending);
 
                 for (int32_t snapIdx = snapBase; snapEnd > snapIdx; snapIdx++) {
+                    // A collision handler that destroyed self (AM2R oWaterDrop: event_user -> instance_destroy, after
+                    // spawning a replacement drop) must not keep firing on the remaining targets, or each extra hit
+                    // spawns one more drop and the room fills up over a few minutes. The GM runners skip marked instances.
+                    if (!self->active) break;
                     Instance* other = runner->instanceSnapshots[snapIdx];
                     if (!other->active) continue;
                     if (other == self) continue;

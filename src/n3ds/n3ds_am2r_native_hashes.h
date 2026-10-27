@@ -86,6 +86,7 @@ static uint32_t N3DSAm2rNative_expectedHash(const char* name) {
         { "gml_Object_oPickup_Draw_0", 0x399021c2 }, // AOT
         { "gml_Object_oShip1_Draw_0", 0x7c367357 }, // AOT
         { "gml_Object_oBackground_Draw_0", 0x49cac72a },
+        { "gml_Object_oTitleAnimation_Draw_0", 0x7c755899 },
     };
     for (size_t k = 0; k < sizeof(kHashes) / sizeof(kHashes[0]); k++) {
         if (strcmp(kHashes[k].name, name) == 0) return kHashes[k].hash;
