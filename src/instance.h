@@ -42,6 +42,11 @@ struct Instance {
     uint32_t gridGeneration; // the SpatialGrid (its generation) collisionCells refer to, 0 = in no grid
     int32_t inactiveSlot; // index in runner->inactiveBBoxes while deactivated, -1 otherwise
     uint32_t lastCollisionQueryId;
+    // Collision dispatch's bbox of this instance, valid while collBBoxStamp == runner->collBBoxStamp (no GML ran and
+    // nothing moved since it was computed).
+    uint32_t collBBoxStamp;
+    GMLReal collBBox[4];
+    bool collBBoxValid;
 
     // Per-instance self variable storage (sparse open-addressed hashmap, keyed by varID).
     IntRValueHashMap selfVars;

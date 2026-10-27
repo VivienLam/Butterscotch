@@ -4082,12 +4082,36 @@ static int sortInstancesByObjectIndexThenInstanceIdAscending(const void* element
     return 0;
 }
 
+// Collision_computeBBox, remembered for the rest of the dispatch until GML runs or an instance is moved by it (the
+// stamp changes then): AM2R checks a few instances against every solid of the room, each bbox recomputed per pair.
+static inline InstanceBBox collisionBBoxCached(Runner* runner, Instance* inst) {
+#ifdef BS_AM2R_NATIVES_HOST
+    static int off = -1; if (off < 0) off = getenv("BS_NOCOLLCACHE") != NULL;
+    if (off) return Collision_computeBBox(runner, inst);
+#endif
+    if (inst->collBBoxStamp == runner->collBBoxStamp) {
+        InstanceBBox b = { inst->collBBox[0], inst->collBBox[1], inst->collBBox[2], inst->collBBox[3], inst->collBBoxValid };
+        return b;
+    }
+    InstanceBBox b = Collision_computeBBox(runner, inst);
+    inst->collBBox[0] = b.left; inst->collBBox[1] = b.right; inst->collBBox[2] = b.top; inst->collBBox[3] = b.bottom;
+    inst->collBBoxValid = b.valid;
+    inst->collBBoxStamp = runner->collBBoxStamp;
+    return b;
+}
+
+static inline void collisionBBoxInvalidate(Runner* runner) {
+    runner->collBBoxStamp++;
+    if (runner->collBBoxStamp == 0) runner->collBBoxStamp = 1;
+}
+
 static void dispatchCollisionEvents(Runner* runner) {
     DataWin* dataWin = runner->dataWin;
     // Iterate only the objects that have any collision event in their parent chain.
     int32_t* selfObjects = (runner->objectsWithAnyEventOfType != nullptr) ? runner->objectsWithAnyEventOfType[EVENT_COLLISION] : nullptr;
     if (selfObjects == nullptr) return;
     int32_t selfObjCount = (int32_t) arrlen(selfObjects);
+    collisionBBoxInvalidate(runner);
 
     repeat(selfObjCount, soIdx) {
         int32_t selfObjIdx = selfObjects[soIdx];
@@ -4155,6 +4179,14 @@ static void dispatchCollisionEvents(Runner* runner) {
                     if (!other->active) continue;
                     if (other == self) continue;
 
+#ifndef ENABLE_VM_TRACING
+                    // Pairs that can't touch go first (the checks below only filter, so the order doesn't matter).
+                    {
+                        InstanceBBox a = collisionBBoxCached(runner, self), b = collisionBBoxCached(runner, other);
+                        if (!a.valid || !b.valid || a.left >= b.right || b.left >= a.right || a.top >= b.bottom || b.top >= a.bottom) continue;
+                    }
+#endif
+
                     if (mostSpecificCollisionTarget(runner, self, other) != targetObjIndex)
                         continue;
 
@@ -4170,11 +4202,11 @@ static void dispatchCollisionEvents(Runner* runner) {
 
                     // Compute bboxes
                     if (selfDirty) {
-                        bboxSelf = Collision_computeBBox(runner, self);
+                        bboxSelf = collisionBBoxCached(runner, self);
                         sprSelf = Collision_getSprite(dataWin, self);
                         selfDirty = false;
                     }
-                    InstanceBBox bboxOther = Collision_computeBBox(runner, other);
+                    InstanceBBox bboxOther = collisionBBoxCached(runner, other);
 
 #ifdef ENABLE_VM_TRACING
                     bool traceThisPair = shouldTraceCollisionPair(runner->vmContext, dataWin, self, other);
@@ -4227,6 +4259,7 @@ static void dispatchCollisionEvents(Runner* runner) {
                         if (other->pathIndex >= 0) other->pathPosition = other->pathPositionPrevious;
                         SpatialGrid_markInstanceAsDirty(runner->spatialGrid, self);
                         SpatialGrid_markInstanceAsDirty(runner->spatialGrid, other);
+                        collisionBBoxInvalidate(runner);
                     }
 
                     // We don't need to call "SpatialGrid_markInstanceAsDirty" here because *technically* just because a collision happened, doesn't mean that the instances have moved
@@ -4236,6 +4269,7 @@ static void dispatchCollisionEvents(Runner* runner) {
                     if (traceThisPair) logInfo("  fire self->other: subtype=%d (%s) owner=%d (%s) codeId=%d codeName=%s\n", targetObjIndex, dataWin->objt.objects[targetObjIndex].name, evt->ownerObjectIndex, dataWin->objt.objects[evt->ownerObjectIndex].name, evt->codeId, dataWin->code.entries[evt->codeId].name);
 #endif
                     executeCollisionEvent(runner, self, other, targetObjIndex, evt->codeId, evt->ownerObjectIndex);
+                    collisionBBoxInvalidate(runner);
 
                     // Then the OTHER instance's collision event, if it has one for us (the pair is skipped in its own pass,
                     // above): self's event may have destroyed self or pushed the two apart (GML, solid resolution).
@@ -4249,6 +4283,7 @@ static void dispatchCollisionEvents(Runner* runner) {
 #endif
                         if (reverseEvt != nullptr)
                             executeCollisionEvent(runner, other, self, (int32_t) reverseEvt->targetObjectIndex, reverseEvt->codeId, reverseEvt->ownerObjectIndex);
+                        collisionBBoxInvalidate(runner);
                     }
 
                     // Native parity for solids: collision event can alter path state, so run one
@@ -4303,6 +4338,7 @@ static void dispatchCollisionEvents(Runner* runner) {
                     }
 
                     // The collision event may have moved our instance, so we'll need to regenerate our self attributes!
+                    collisionBBoxInvalidate(runner);
                     selfDirty = true;
                 }
                 Runner_popInstanceSnapshot(runner, snapBase);
@@ -5203,7 +5239,7 @@ void Runner_step(Runner* runner) {
         runner->fps = (double)(runner->frameCount - runner->fpsWindowStartFrame);
 #ifdef BS_AM2R_NATIVES_HOST
         // Bench (BS_FPSREAL): fps doesn't follow wall time, so runs are reproducible.
-        { static int fixedFps = -1; if (fixedFps < 0) fixedFps = getenv("BS_FPSREAL") != NULL; if (fixedFps) runner->fps = 60.0; }
+        { static int fixedFps = -1; if (fixedFps < 0) fixedFps = getenv("BS_FPSREAL") != NULL; if (fixedFps) runner->fps = getenv("BS_FPS") != NULL ? atof(getenv("BS_FPS")) : 60.0; }
 #endif
         runner->fpsWindowStartFrame = runner->frameCount;
         runner->fpsWindowStartNanos = nowNanos();

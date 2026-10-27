@@ -723,6 +723,8 @@ struct Runner {
     // (collisionSortedTargets[obj], valid while collisionSortedGen[obj] == objectListsGen) instead of re-sorting it
     // for every instance that has a collision event.
     uint32_t objectListsGen;
+    // See Instance.collBBoxStamp.
+    uint32_t collBBoxStamp;
     Instance*** collisionSortedTargets;
     uint32_t* collisionSortedGen;
     // Precomputed (eventType, eventSubtype) -> dense slot remap. Built once at Runner_create, never mutated.

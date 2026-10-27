@@ -503,6 +503,7 @@ void N3DSAm2rNative_setHiddenStep(bool hidden) {
 #pragma GCC optimize("Os")
 #include "n3ds_aot_gen.inc"
 #pragma GCC pop_options
+#include "n3ds_am2r_native_water.inc"
 #define AOT_COUNT ((int32_t) (sizeof(gAotScripts) / sizeof(gAotScripts[0])))
 #define AOT_ENTRY_BASE 1000
 
@@ -818,6 +819,7 @@ void N3DSAm2rNative_init(Runner* runner) {
     N.keyboardCheck = builtin("keyboard_check");
     gDrawBackgroundTiledExt = builtin("draw_background_tiled_ext");
     gSprTitleAnimated = N3DSGml_spriteIndex("sTitleAnimated");
+    gDrawSurfacePartExt = builtin("draw_surface_part_ext");
     N.gamepadButtonCheck = builtin("gamepad_button_check");
     N.gamepadIsSupported = builtin("gamepad_is_supported");
     N.gamepadIsConnected = builtin("gamepad_is_connected");
@@ -1027,6 +1029,11 @@ void N3DSAm2rNative_init(Runner* runner) {
         N.available++;
         if (a->event != NULL) {
             N.events[code] = a->event;
+            if (a->event == aot_oWaterFXV2_Draw_0_event && gDrawSurfacePartExt != NULL
+#ifndef __3DS__
+                && getenv("BS_NOWATERFAST") == NULL
+#endif
+            ) N.events[code] = aot_fast_oWaterFXV2_Draw_0_event;
             continue;
         }
         for (uint32_t f = 0; f < N.vm->funcCallCacheCount; f++) {

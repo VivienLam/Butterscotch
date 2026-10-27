@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include "n3ds/n3ds_gml.h"
 #include "n3ds/n3ds_am2r_native.h"
+#if __has_include(<valgrind/callgrind.h>)
+#include <valgrind/callgrind.h>
+#endif
 
 // Bench: the 3DS atlas's tile -> page table (gfx/atlas.bin from n3ds-preprocess), as the tile batch key.
 typedef struct { int16_t bg; uint16_t sx, sy, sw, sh, page; } BenchTileKey;
@@ -1185,6 +1188,14 @@ int loop(CommandLineArgs args, const char *argv0) {
                 InputRecording_processFrame(globalInputRecording, runner->keyboard, inputFrameCount++);
             }
 
+#if defined(BS_AM2R_NATIVES_HOST) && __has_include(<valgrind/callgrind.h>)
+            // BS_CGSTART=<frame>: callgrind collects from that frame on (run with --collect-atstart=no).
+            {
+                static int cgStart = -2;
+                if (cgStart == -2) cgStart = getenv("BS_CGSTART") != NULL ? atoi(getenv("BS_CGSTART")) : -1;
+                if (cgStart >= 0 && runner->frameCount == cgStart) CALLGRIND_TOGGLE_COLLECT;
+            }
+#endif
             // --goto-room
             repeat(arrlen(args.gotoRooms), gi) {
                 if (args.gotoRooms[gi].frame != runner->frameCount) continue;
@@ -1336,6 +1347,8 @@ int loop(CommandLineArgs args, const char *argv0) {
 #endif
 #ifdef BS_AM2R_NATIVES_HOST
                 double rsT0 = rsOn() ? rsCpuNs() : 0.0;
+                // Bench (BS_FPSREAL): fps pinned from the first frame (the runner only updates it once a wall-clock second).
+                if (getenv("BS_FPSREAL") != NULL) runner->fps = getenv("BS_FPS") != NULL ? atof(getenv("BS_FPS")) : 60.0;
 #endif
                 Runner_step(runner);
 #ifdef BS_AM2R_NATIVES_HOST
