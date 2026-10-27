@@ -1424,7 +1424,7 @@ static void N3DSRenderer_clearAtlasPagePins(N3DSRenderer* renderer) {
     }
 }
 
-static void N3DSRenderer_flushRoomAtlasResidencyOld3DS(N3DSRenderer* renderer) {
+__attribute__((unused)) static void N3DSRenderer_flushRoomAtlasResidencyOld3DS(N3DSRenderer* renderer) {
     if (renderer == NULL || renderer->isNew3DS) return;
 
     repeat(renderer->atlasPageCount, i) {
@@ -5757,7 +5757,9 @@ static void N3DSRenderer_beginFrame(Renderer* base, int32_t gameW, int32_t gameH
         renderer->pendingOld3DSAtlasFlush = false;
         N3DSRenderer_clearAtlasPagePins(renderer);
         N3DSRenderer_preloadFontPages(renderer);
-        N3DSRenderer_flushRoomAtlasResidencyOld3DS(renderer);
+        // No longer unloads every atlas page on a room change: on Old 3DS that re-imported Samus, the HUD and the
+        // shared sprites in each new room's first frames (200-300 ms of SD reads inside the step). Pages now leave
+        // through the normal LRU eviction, which keeps the linear-memory reserve.
     }
 
     N3DSRenderer_setDefaultGPUState(renderer);
