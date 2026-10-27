@@ -4008,7 +4008,7 @@ static uint32_t N3DSRenderer_readAheadPageCounted(N3DSRenderer* renderer, bool* 
     return 1;
 }
 
-static void N3DSRenderer_readAheadTPAG(N3DSRenderer* renderer, bool* seenPages, int32_t tpagIndex, uint32_t* budget) {
+static void N3DSRenderer_readAheadRoomTPAG(N3DSRenderer* renderer, bool* seenPages, int32_t tpagIndex, uint32_t* budget) {
     if (tpagIndex < 0 || (uint32_t) tpagIndex >= renderer->atlasItemCount) return;
     if (N3DSRenderer_isFragmentedAtlasVersion(renderer->atlasVersion)) {
         N3DSAtlasItemV3* item = &renderer->atlasItemsV3[tpagIndex];
@@ -4050,7 +4050,7 @@ void N3DSRenderer_readAheadRoom(Renderer* base, int32_t roomIndex) {
     if (room->backgrounds != NULL) {
         repeat(8, i) {
             if (budget == 0 || !room->backgrounds[i].enabled || room->backgrounds[i].backgroundDefinition < 0) continue;
-            N3DSRenderer_readAheadTPAG(renderer, seenPages, Renderer_resolveBackgroundTPAGIndex(dw, room->backgrounds[i].backgroundDefinition), &budget);
+            N3DSRenderer_readAheadRoomTPAG(renderer, seenPages, Renderer_resolveBackgroundTPAGIndex(dw, room->backgrounds[i].backgroundDefinition), &budget);
         }
     }
     const N3DSRoomManifestEntry* manifest = N3DSRenderer_findRoomManifestEntry(renderer, (uint32_t) roomIndex);
