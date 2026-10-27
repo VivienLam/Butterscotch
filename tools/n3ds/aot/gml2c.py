@@ -279,6 +279,16 @@ class Parser:
                 e = ('dot', e, self.take().text)
             elif self.at('['):
                 self.i += 1
+                # Accessors (GMS 1.4 compiles them to the ds_* calls): l[|i], m[?k], g[#x, y]
+                acc = {'|': 'ds_list_find_value', '?': 'ds_map_find_value', '#': 'ds_grid_get'}
+                if self.peek().kind == 'op' and self.peek().text in acc:
+                    fn = acc[self.take().text]
+                    args = [e, self.expr()]
+                    while self.opt(','):
+                        args.append(self.expr())
+                    self.take(']')
+                    e = ('call', fn, args)
+                    continue
                 idx = [self.expr()]
                 while self.opt(','):
                     idx.append(self.expr())

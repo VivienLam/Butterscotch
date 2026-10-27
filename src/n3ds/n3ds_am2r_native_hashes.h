@@ -90,6 +90,49 @@ static uint32_t N3DSAm2rNative_expectedHash(const char* name) {
         { "gml_Object_oTsumuri_Step_1", 0x109adbd0 }, // AOT
         { "gml_Object_oFXAnimSpark_Draw_0", 0x401715a6 }, // AOT
         { "gml_Object_oLavaBGFX_Draw_0", 0xc5dc1c29 }, // AOT
+        { "gml_Object_oTilesRandomAlpha_Other_10", 0x724f6d34 }, // AOT
+        { "gml_Object_oA4TileLight1_Step_0", 0x83f8a3fd }, // AOT
+        { "gml_Object_oMeboid2_Step_0", 0x53768ff9 }, // AOT
+        { "gml_Object_oBattery_Step_0", 0x3134be62 }, // AOT
+        { "gml_Object_oSkorpLure_Draw_0", 0xaa862c0c }, // AOT
+        { "gml_Object_oSkorpLure_Step_0", 0x5b026845 }, // AOT
+        { "gml_Object_oCurrentBubble_Step_0", 0xd5b71eb1 }, // AOT
+        { "gml_Object_oQueenHead_Draw_0", 0x1520e9ed }, // AOT
+        { "gml_Object_oQueenHead_Step_0", 0x24c99d16 }, // AOT
+        { "gml_Object_oSkorp_Step_0", 0x5744f327 }, // AOT
+        { "gml_Object_oA4BlastDoor_Draw_0", 0x515d5a76 }, // AOT
+        { "gml_Object_oMGammaTriggerProx_Draw_0", 0x4311d90a }, // AOT
+        { "gml_Object_oRoboMine_Step_0", 0x0a077a6e }, // AOT
+        { "gml_Object_oBladeBot_Step_0", 0xffe93e6a }, // AOT
+        { "gml_Object_oA5ActivationBG_Draw_0", 0x356ca9f9 }, // AOT
+        { "skorp_get_lure", 0xd35df08c }, // AOT
+        { "gml_Object_oShielder_Step_0", 0x10da2d02 }, // AOT
+        { "gml_Object_oSkreek2_Step_0", 0x19eabe4a }, // AOT
+        { "gml_Object_oMoheekWater_Step_0", 0xd3bab2b5 }, // AOT
+        { "gml_Object_oMOmegaTail_Draw_0", 0xeb61011b }, // AOT
+        { "gml_Object_oFlitt_Step_0", 0x37d49065 }, // AOT
+        { "gml_Object_oLightBug_Step_0", 0x1f4a3743 }, // AOT
+        { "gml_Object_oLightBug_Draw_0", 0xc367f750 }, // AOT
+        { "gml_Object_oDrillBack_Draw_0", 0x7135793e }, // AOT
+        { "gml_Object_oSpikeSolid_Step_0", 0xba6c8520 }, // AOT
+        { "gml_Object_oMOmega_Step_0", 0x36cda18a }, // AOT
+        { "gml_Object_oShirk_Draw_0", 0x85dee90a }, // AOT
+        { "gml_Object_oMachine1Beam_Draw_0", 0xeaadbf0a }, // AOT
+        { "gml_Object_oShielderShield_Draw_0", 0x8651234e }, // AOT
+        { "gml_Object_oShielderShield_Step_0", 0x8ccef959 }, // AOT
+        { "gml_Object_oSkorpDisc_Step_0", 0x4ce89941 }, // AOT
+        { "gml_Object_oMonster_Step_0", 0x6008d1c9 }, // AOT
+        { "gml_Object_oMonster_Draw_0", 0xcd9e705e }, // AOT
+        { "gml_Object_oAutoad_Draw_0", 0x78e1a80c }, // AOT
+        { "gml_Object_oMZeta_Cocoon_Draw_0", 0x01eb7ef8 }, // AOT
+        { "gml_Object_oQueenLegFront_Draw_0", 0xd5811ac6 }, // AOT
+        { "gml_Object_oQueenLegFront_Step_0", 0x73a8504a }, // AOT
+        { "gml_Object_oWallfire_Step_0", 0x1c8a1be7 }, // AOT
+        { "gml_Object_oGravitt_Step_1", 0xc3adf838 }, // AOT
+        { "gml_Object_oA3Slasher_Draw_0", 0xcb679e40 }, // AOT
+        { "gml_Object_oErisPipe_Draw_0", 0xfbc89bda }, // AOT
+        { "gml_Object_oA8RedLight_Draw_0", 0xc367f750 }, // AOT
+        { "gml_Object_oTPO_Step_0", 0x05c0cfc3 }, // AOT
         { "gml_Object_oBackground_Draw_0", 0x49cac72a },
         { "gml_Object_oTitleAnimation_Draw_0", 0x7c755899 },
     };

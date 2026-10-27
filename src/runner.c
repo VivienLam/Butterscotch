@@ -5201,6 +5201,10 @@ void Runner_step(Runner* runner) {
     // Measure fps builtin
     if (nowNanos() - runner->fpsWindowStartNanos >= (uint64_t)1000000000) {
         runner->fps = (double)(runner->frameCount - runner->fpsWindowStartFrame);
+#ifdef BS_AM2R_NATIVES_HOST
+        // Bench (BS_FPSREAL): fps doesn't follow wall time, so runs are reproducible.
+        { static int fixedFps = -1; if (fixedFps < 0) fixedFps = getenv("BS_FPSREAL") != NULL; if (fixedFps) runner->fps = 60.0; }
+#endif
         runner->fpsWindowStartFrame = runner->frameCount;
         runner->fpsWindowStartNanos = nowNanos();
     }

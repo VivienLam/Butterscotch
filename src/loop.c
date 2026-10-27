@@ -98,6 +98,25 @@ static void benchLoadTileAtlas(const char* path, Renderer* renderer) {
 #include "noop_renderer.h"
 #endif
 #include "overlay_file_system.h"
+
+#ifdef BS_AM2R_NATIVES_HOST
+// BS_ROOMSTATS=1: per room, CPU time of the steps and of the drawing (GML draw events + renderer calls) and draw call
+// counts, printed as "ROOMSTAT" lines when the room changes and at exit; for ranking rooms by expected 3DS cost.
+extern long gNoopDrawCounts[5];
+static struct { int32_t room; long frames, steps; double stepNs, drawNs, worstFrameNs, curFrameNs, enterNs; bool entering; double inst, tiles, sprites, shapes, text, surfaces; long maxInst; } gRS = { -1 };
+static double rsCpuNs(void) { struct timespec ts; clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts); return (double) ts.tv_sec * 1e9 + (double) ts.tv_nsec; }
+static bool rsOn(void) { static int on = -1; if (on < 0) on = getenv("BS_ROOMSTATS") != NULL; return on != 0; }
+static void rsFlush(Runner* runner) {
+    if (gRS.room >= 0 && gRS.frames > 0) {
+        double f = (double) gRS.frames;
+        fprintf(stderr, "ROOMSTAT %s frames=%ld enter_us=%.0f step_us=%.1f draw_us=%.1f worst_us=%.1f inst=%.1f maxinst=%ld tiles=%.1f sprites=%.1f shapes=%.1f text=%.1f surfaces=%.1f\n",
+            runner->dataWin->room.rooms[gRS.room].name, gRS.frames, gRS.enterNs / 1000.0, gRS.stepNs / f / 1000.0, gRS.drawNs / f / 1000.0, gRS.worstFrameNs / 1000.0,
+            gRS.inst / f, gRS.maxInst, gRS.tiles / f, gRS.sprites / f, gRS.shapes / f, gRS.text / f, gRS.surfaces / f);
+    }
+    memset(&gRS, 0, sizeof(gRS));
+    gRS.room = runner->currentRoomIndex;
+}
+#endif
 #if defined(USE_OPENAL)
 #include "al_audio_system.h"
 #elif defined(USE_MINIAUDIO)
@@ -1315,9 +1334,17 @@ int loop(CommandLineArgs args, const char *argv0) {
                     slot->axisValue[1] = (float) cos((double) f * 0.017) * 0.6f;
                 }
 #endif
+#ifdef BS_AM2R_NATIVES_HOST
+                double rsT0 = rsOn() ? rsCpuNs() : 0.0;
+#endif
                 Runner_step(runner);
 #ifdef BS_AM2R_NATIVES_HOST
                 N3DSAm2rNative_setHiddenStep(false);
+                if (rsOn()) {
+                    double dt = rsCpuNs() - rsT0;
+                    if (gRS.room != runner->currentRoomIndex) { rsFlush(runner); gRS.enterNs = dt; gRS.entering = true; }
+                    else { gRS.stepNs += dt; gRS.steps++; gRS.curFrameNs += dt; }
+                }
 #endif
             }
 
@@ -1329,7 +1356,7 @@ int loop(CommandLineArgs args, const char *argv0) {
 
             if (shouldStep) {
                 if (args.profilerFramesBetween > 0 && runner->frameCount > 0 && runner->frameCount % args.profilerFramesBetween == 0) {
-                    char* profilerReport = Profiler_createReport(vm->profiler, 20, args.profilerFramesBetween);
+                    char* profilerReport = Profiler_createReport(vm->profiler, getenv("BS_PROFTOP") != NULL ? atoi(getenv("BS_PROFTOP")) : 20, args.profilerFramesBetween);
                     if (profilerReport != nullptr) {
                         logInfo("%s\n", profilerReport);
                         free(profilerReport);
@@ -1426,6 +1453,10 @@ int loop(CommandLineArgs args, const char *argv0) {
                     }
                 }
 
+#ifdef BS_AM2R_NATIVES_HOST
+                double rsD0 = rsOn() ? rsCpuNs() : 0.0;
+                if (rsOn()) memset(gNoopDrawCounts, 0, sizeof(gNoopDrawCounts));
+#endif
                 Runner_drawPre(runner, fbWidth, fbHeight);
 
                 // Calculate viewport (letterboxing) in screen coordinates for mouse mapping
@@ -1444,6 +1475,18 @@ int loop(CommandLineArgs args, const char *argv0) {
                 renderer->vtable->endFrameEnd(renderer);
                 Runner_drawGUI(runner, fbWidth, fbHeight, gameW, gameH);
 #ifdef BS_AM2R_NATIVES_HOST
+                if (rsOn() && gRS.entering) { gRS.enterNs += rsCpuNs() - rsD0; gRS.entering = false; gRS.curFrameNs = 0; }
+                else if (rsOn() && gRS.room == runner->currentRoomIndex) {
+                    double dt = rsCpuNs() - rsD0;
+                    gRS.drawNs += dt; gRS.frames++;
+                    gRS.curFrameNs += dt;
+                    if (gRS.curFrameNs > gRS.worstFrameNs) gRS.worstFrameNs = gRS.curFrameNs;
+                    gRS.curFrameNs = 0;
+                    long n = (long) arrlen(runner->instances);
+                    gRS.inst += (double) n; if (n > gRS.maxInst) gRS.maxInst = n;
+                    gRS.tiles += gNoopDrawCounts[0]; gRS.sprites += gNoopDrawCounts[1]; gRS.shapes += gNoopDrawCounts[2];
+                    gRS.text += gNoopDrawCounts[3]; gRS.surfaces += gNoopDrawCounts[4];
+                }
                 // BS_FPSREAL=<n>: fixed fps_real, so bench runs don't depend on wall time (AM2R culls offscreen
                 // bubbles when fps_real < 60, which made natives off/on diverge on timing alone).
                 {
@@ -1536,6 +1579,9 @@ int loop(CommandLineArgs args, const char *argv0) {
 #endif
 
             if (args.exitAtFrame >= 0 && runner->frameCount >= args.exitAtFrame) {
+#ifdef BS_AM2R_NATIVES_HOST
+                if (rsOn()) rsFlush(runner);
+#endif
                 logInfo("Exiting at frame %d (--exit-at-frame)\n", runner->frameCount);
                 shouldWindowClose = true;
             }

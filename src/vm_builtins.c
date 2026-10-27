@@ -15341,15 +15341,42 @@ static RValue builtin_tile_delete(VMContext* ctx, RValue* args, MAYBE_UNUSED int
 }
 
 // tile_set_alpha(id, alpha) - sets the alpha (0.0 to 1.0) of the tile with the given id.
+// Tile by id through an id -> index table built per room (AM2R's oTilesRandomAlpha sets the alpha of hundreds of
+// tiles every step, each a scan of the room's tiles before). The table is checked on every hit and rebuilt when the
+// room's tiles change.
+static RoomTile* findRoomTileByIdFast(Room* room, uint32_t id) {
+    static Room* mapRoom = nullptr;
+    static RoomTile* mapTiles = nullptr;
+    static uint32_t mapCount = 0;
+    static struct { uint32_t key; uint32_t value; }* map = nullptr;
+    if (room == nullptr || room->tileCount == 0) return nullptr;
+    for (int pass = 0; pass < 2; pass++) {
+        if (mapRoom != room || mapTiles != room->tiles || mapCount != room->tileCount || pass == 1) {
+            hmfree(map);
+            map = nullptr;
+            for (uint32_t i = room->tileCount; i-- > 0;) hmput(map, room->tiles[i].instanceID, i); // first one wins
+            mapRoom = room; mapTiles = room->tiles; mapCount = room->tileCount;
+        }
+        ptrdiff_t slot = hmgeti(map, id);
+        if (slot >= 0) {
+            uint32_t i = map[slot].value;
+            if (i < room->tileCount && room->tiles[i].instanceID == id) return &room->tiles[i];
+        } else if (pass == 0) {
+            return nullptr;
+        }
+    }
+    return nullptr;
+}
+
 static RValue builtin_tile_set_alpha(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     Runner* runner = ctx->runner;
     Room* room = runner->currentRoom;
     if (room == nullptr) return RValue_makeUndefined();
     uint32_t id = (uint32_t) RValue_toInt32(args[0]);
     float alpha = (float) RValue_toReal(args[1]);
-    repeat(room->tileCount, i) {
-        if (room->tiles[i].instanceID != id) continue;
-        room->tiles[i].alpha = alpha;
+    RoomTile* tile = findRoomTileByIdFast(room, id);
+    if (tile != nullptr) {
+        tile->alpha = alpha;
         return RValue_makeUndefined();
     }
     logWarn("VM: tile_set_alpha: tile does not exist (%u)\n", id);
@@ -15357,12 +15384,7 @@ static RValue builtin_tile_set_alpha(VMContext* ctx, RValue* args, MAYBE_UNUSED 
 }
 
 static RoomTile* findRoomTileById(Runner* runner, uint32_t id) {
-    Room* room = runner->currentRoom;
-    if (room == nullptr) return nullptr;
-    repeat(room->tileCount, i) {
-        if (room->tiles[i].instanceID == id) return &room->tiles[i];
-    }
-    return nullptr;
+    return findRoomTileByIdFast(runner->currentRoom, id);
 }
 
 // tile_get_background(id) - the background asset the tile is cut from (-1 if there is no such tile).
