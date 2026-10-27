@@ -3,6 +3,11 @@
 #include "data_win.h"
 #include "vm.h"
 #include "loop.h"
+#ifdef BS_AM2R_NATIVES_HOST
+#include <stdlib.h>
+#include "n3ds/n3ds_gml.h"
+#include "n3ds/n3ds_am2r_native.h"
+#endif
 
 #include "platformdefs.h"
 #include "stdio_compat.h"
@@ -975,6 +980,16 @@ int loop(CommandLineArgs args, const char *argv0) {
 
         // Initialize the runner
         Runner* runner = Runner_create(dataWin, vm, renderer, (FileSystem*) overlayFs, audioSystem, args.seed);
+#ifdef BS_AM2R_NATIVES_HOST
+        // Desktop test bench for the 3DS port's AM2R natives (src/n3ds/n3ds_am2r_native.c): BS_NATIVES=1 runs them
+        // here, so a run with and without them can be compared state for state.
+        if (getenv("BS_NATIVES") != NULL) {
+            N3DSGml_init(runner);
+            N3DSAm2rNative_setEnabled(true);
+            N3DSAm2rNative_init(runner);
+            logInfo("AM2R natives (desktop bench): %d available\n", (int) N3DSAm2rNative_available());
+        }
+#endif
 
         if (!args.lazyTextures) {
             repeat(runner->dataWin->txtr.count, i) {

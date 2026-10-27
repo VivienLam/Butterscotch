@@ -393,6 +393,14 @@ if(PLATFORM STREQUAL "cli" OR PLATFORM STREQUAL "vita" OR PLATFORM STREQUAL "swi
     # Matches the GitHub Actions container flags (FORTIFY requires building with optimizations enabled!)
     target_compile_options(butterscotch PRIVATE "$<$<CONFIG:Release,RelWithDebInfo>:-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=2>")
 
+    # Desktop test bench for the 3DS port's AM2R natives: run with BS_NATIVES=1 to compare against the game's code.
+    option(BS_AM2R_NATIVES_HOST "Build the 3DS port's AM2R natives into the desktop runner (BS_NATIVES=1)" OFF)
+    if(BS_AM2R_NATIVES_HOST)
+        target_sources(butterscotch PRIVATE src/n3ds/n3ds_gml.c src/n3ds/n3ds_am2r_native.c)
+        target_compile_definitions(butterscotch PRIVATE BS_AM2R_NATIVES_HOST)
+        target_include_directories(butterscotch PRIVATE ${CMAKE_SOURCE_DIR}/vendor)
+    endif()
+
     if(NOT ENABLE_LEGACY_GL AND NOT ENABLE_MODERN_GL AND NOT ENABLE_NOOP_RENDERER)
         message(FATAL_ERROR "You must enable at least one renderer!")
     endif()

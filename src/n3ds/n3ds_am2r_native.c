@@ -9,6 +9,7 @@
 #include "../utils.h"
 #include "../vm.h"
 #include "../vm_builtins.h"
+#include "../spatial_grid.h"
 
 #include <stb/ds/stb_ds.h>
 #include <math.h>
@@ -504,6 +505,170 @@ static bool native_oEnemy_Draw_0(MAYBE_UNUSED Runner* runner, Instance* self) {
 
 // ===[ Table ]===
 
+
+// ===[ Movement (moveTo and the scripts it calls) ]===
+
+VAR(mtXPrev); VAR(mtYPrev); VAR(time); VAR(xVelFrac); VAR(yVelFrac); VAR(xVelInteger); VAR(yVelInteger);
+VAR(ON_GROUND); VAR(IN_AIR); VAR(ON_LADDER); VAR(RUNNING); VAR(STANDING); VAR(DUCKING); VAR(BALL); VAR(JUMPING);
+VAR(FALLING); VAR(AIRBALL); VAR(CLIMBING);
+
+static int32_t gCode_moveTo = -1, gCode_isCollisionPlatformBottom = -1, gCode_platformCharacterIs = -1;
+static int32_t gObjPlatform = -1;
+
+// Index in gEntries of each hooked collision script, to know whether its native applies to this game.
+enum { E_isCollisionLeft = 2, E_isCollisionRight = 3, E_isCollisionTop = 4, E_isCollisionBottom = 5 };
+static int32_t E_isCollisionPlatformBottom = -1;
+
+static bool entryMatches(int32_t k);
+
+// A call of one of the hooked collision scripts with argument 1, as moveTo's Call.i + Conv.v.b does it: the native
+// when it applies to this game, the game's script otherwise.
+static bool sideHit(VMContext* ctx, Side side) {
+    static const int32_t entryOf[4] = { E_isCollisionLeft, E_isCollisionRight, E_isCollisionTop, E_isCollisionBottom };
+    int32_t codes[4] = { gCode_isCollisionLeft, gCode_isCollisionRight, gCode_isCollisionTop, gCode_isCollisionBottom };
+    RValue arg = RValue_makeInt32(1);
+    RValue r = entryMatches(entryOf[side]) ? isCollisionSide(ctx, &arg, 1, side, codes[side]) : callOriginal(codes[side], &arg, 1);
+    bool hit = RValue_toReal(r) > 0.5;
+    RValue_free(&r);
+    return hit;
+}
+
+// isCollisionPlatformBottom(a0): calculateCollisionBounds();
+//   return collision_line(round(lb), round(bb + a0 - 1), round(rb - 1), round(bb + a0 - 1), oPlatform, 1, 1) > 0
+static RValue native_isCollisionPlatformBottom(VMContext* ctx, RValue* args, int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    GMLReal a0, lb, rb, bb;
+    if (self == NULL || gObjPlatform < 0 || !argNum(args, argCount, 0, &a0) || !calcBounds(self) ||
+        !num(self, &v_lb, &lb) || !num(self, &v_rb, &rb) || !num(self, &v_bb, &bb)) {
+        return callOriginal(gCode_isCollisionPlatformBottom, args, argCount);
+    }
+    RValue a[7] = { R(GMLReal_bankersRound(lb)), R(GMLReal_bankersRound(bb + a0 - 1)), R(GMLReal_bankersRound(rb - 1)),
+        R(GMLReal_bankersRound(bb + a0 - 1)), R((GMLReal) gObjPlatform), R(1.0), R(1.0) };
+    RValue r = N.collisionLine(N.vm, a, 7);
+    bool hit = gmlCmp(RValue_toReal(r), 0.0) > 0;
+    RValue_free(&r);
+    return RValue_makeInt32(hit ? 1 : 0);
+}
+
+static bool platformHit(VMContext* ctx) {
+    RValue arg = RValue_makeInt32(1);
+    RValue r = entryMatches(E_isCollisionPlatformBottom) ? native_isCollisionPlatformBottom(ctx, &arg, 1)
+                                                         : callOriginal(gCode_isCollisionPlatformBottom, &arg, 1);
+    bool hit = RValue_toReal(r) > 0.5;
+    RValue_free(&r);
+    return hit;
+}
+
+// platformCharacterIs(a0): ON_GROUND: state is RUNNING/STANDING/DUCKING/BALL; IN_AIR: JUMPING/FALLING/AIRBALL;
+// ON_LADDER: CLIMBING. All of them are the instance's own variables; any of them missing or not a number -> the game's code.
+static RValue native_platformCharacterIs(VMContext* ctx, RValue* args, int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    GMLReal a0, st, onGround, inAir, onLadder, running, standing, ducking, ball, jumping, falling, airball, climbing;
+    if (self == NULL || !argNum(args, argCount, 0, &a0) || !num(self, &v_state, &st) || !num(self, &v_ON_GROUND, &onGround) ||
+        !num(self, &v_IN_AIR, &inAir) || !num(self, &v_ON_LADDER, &onLadder) || !num(self, &v_RUNNING, &running) ||
+        !num(self, &v_STANDING, &standing) || !num(self, &v_DUCKING, &ducking) || !num(self, &v_BALL, &ball) ||
+        !num(self, &v_JUMPING, &jumping) || !num(self, &v_FALLING, &falling) || !num(self, &v_AIRBALL, &airball) ||
+        !num(self, &v_CLIMBING, &climbing)) {
+        return callOriginal(gCode_platformCharacterIs, args, argCount);
+    }
+    if (gmlCmp(a0, onGround) == 0 && (gmlCmp(st, running) == 0 || gmlCmp(st, standing) == 0 || gmlCmp(st, ducking) == 0 ||
+            gmlCmp(st, ball) == 0)) return RValue_makeInt32(1);
+    if (gmlCmp(a0, inAir) == 0 && (gmlCmp(st, jumping) == 0 || gmlCmp(st, falling) == 0 || gmlCmp(st, airball) == 0)) {
+        return RValue_makeInt32(1);
+    }
+    if (gmlCmp(a0, onLadder) == 0 && gmlCmp(st, climbing) == 0) return RValue_makeInt32(1);
+    return RValue_makeInt32(0);
+}
+
+static inline void setX(Instance* self, GMLReal v) {
+    float value = (float) v;
+    if (value != self->x) {
+        self->x = value;
+        SpatialGrid_markInstanceAsDirty(N.runner->spatialGrid, self);
+    }
+}
+
+static inline void setY(Instance* self, GMLReal v) {
+    float value = (float) v;
+    if (value != self->y) {
+        self->y = value;
+        SpatialGrid_markInstanceAsDirty(N.runner->spatialGrid, self);
+    }
+}
+
+// moveTo(a0, a1), as the bytecode does it (gml_Script_moveTo, AM2R 1.5.5): sub-pixel speeds become a whole pixel every
+// round(1/frac) frames of self.time, then the instance steps one pixel at a time until the target or a wall.
+static RValue native_moveTo(VMContext* ctx, RValue* args, int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    GMLReal a0, a1, t;
+    if (self == NULL || !argNum(args, argCount, 0, &a0) || !argNum(args, argCount, 1, &a1) ||
+        v_mtXPrev.id < 0 || v_mtYPrev.id < 0 || v_xVelFrac.id < 0 || v_yVelFrac.id < 0 || v_xVelInteger.id < 0 ||
+        v_yVelInteger.id < 0 || !num(self, &v_time, &t)) {
+        return callOriginal(gCode_moveTo, args, argCount);
+    }
+    // if (room != rm_transition)
+    if (gmlCmp((GMLReal) N.runner->currentRoomIndex, 17.0) == 0) return R(0.0);
+
+    GMLReal mtXPrev = (GMLReal) self->x, mtYPrev = (GMLReal) self->y;
+    setNum(self, &v_mtXPrev, mtXPrev);
+    setNum(self, &v_mtYPrev, mtYPrev);
+    t = t + 1;
+    setNum(self, &v_time, t);
+    if (gmlCmp(t, 100000000.0) > 0) {
+        t = 0;
+        setNum(self, &v_time, t);
+    }
+    GMLReal ax = GMLReal_fabs(a0), ay = GMLReal_fabs(a1);
+    GMLReal xVelFrac = ax - ((ax >= 0.0) ? GMLReal_floor(ax) : GMLReal_ceil(ax));
+    GMLReal yVelFrac = ay - ((ay >= 0.0) ? GMLReal_floor(ay) : GMLReal_ceil(ay));
+    setNum(self, &v_xVelFrac, xVelFrac);
+    setNum(self, &v_yVelFrac, yVelFrac);
+    GMLReal xVelInteger = 0, yVelInteger = 0;
+    if (gmlCmp(xVelFrac, 0.0) != 0) {
+        GMLReal period = GMLReal_bankersRound(1.0 / xVelFrac);
+        if (gmlCmp(period, 0.0) != 0) xVelInteger = gmlCmp(GMLReal_fmod(t, period), 0.0) == 0 ? 1.0 : 0.0;
+    }
+    if (gmlCmp(yVelFrac, 0.0) != 0) {
+        GMLReal period = GMLReal_bankersRound(1.0 / yVelFrac);
+        if (gmlCmp(period, 0.0) != 0) yVelInteger = gmlCmp(GMLReal_fmod(t, period), 0.0) == 0 ? 1.0 : 0.0;
+    }
+    xVelInteger += GMLReal_floor(ax);
+    yVelInteger += GMLReal_floor(ay);
+    if (gmlCmp(a0, 0.0) < 0) xVelInteger *= -1;
+    if (gmlCmp(a1, 0.0) < 0) yVelInteger *= -1;
+    xVelInteger = GMLReal_bankersRound(xVelInteger);
+    yVelInteger = GMLReal_bankersRound(yVelInteger);
+    setNum(self, &v_xVelInteger, xVelInteger);
+    setNum(self, &v_yVelInteger, yVelInteger);
+
+    if (gmlCmp(xVelInteger, 0.0) > 0) {
+        while (gmlCmp((GMLReal) self->x, mtXPrev + xVelInteger) < 0) {
+            if (sideHit(ctx, SIDE_RIGHT)) break;
+            setX(self, (GMLReal) self->x + 1);
+        }
+    }
+    if (gmlCmp(xVelInteger, 0.0) < 0) {
+        while (gmlCmp((GMLReal) self->x, mtXPrev + xVelInteger) > 0) {
+            if (sideHit(ctx, SIDE_LEFT)) break;
+            setX(self, (GMLReal) self->x - 1);
+        }
+    }
+    if (gmlCmp(yVelInteger, 0.0) > 0) {
+        while (gmlCmp((GMLReal) self->y, mtYPrev + yVelInteger) < 0) {
+            if (sideHit(ctx, SIDE_BOTTOM)) break;
+            if (self->objectIndex == N.objCharacter && platformHit(ctx)) break;
+            setY(self, (GMLReal) self->y + 1);
+        }
+    }
+    if (gmlCmp(yVelInteger, 0.0) < 0) {
+        while (gmlCmp((GMLReal) self->y, mtYPrev + yVelInteger) > 0) {
+            if (sideHit(ctx, SIDE_TOP)) break;
+            setY(self, (GMLReal) self->y - 1);
+        }
+    }
+    return R(0.0);
+}
+
 static NativeEntry gEntries[] = {
     { "approximatelyZero", native_approximatelyZero, NULL, 0, -1, false },
     { "calculateCollisionBounds", native_calculateCollisionBounds, NULL, 0, -1, false },
@@ -519,8 +684,15 @@ static NativeEntry gEntries[] = {
     { "gml_Object_oEnemy_Draw_0", NULL, native_oEnemy_Draw_0, 0, -1, false },
     { "draw_gui", native_draw_gui, NULL, 0, -1, false },
     { "gml_Object_oLightEngine_Other_11", NULL, native_oLightEngine_Other_11, 0, -1, false },
+    { "moveTo", native_moveTo, NULL, 0, -1, false },
+    { "isCollisionPlatformBottom", native_isCollisionPlatformBottom, NULL, 0, -1, false },
+    { "platformCharacterIs", native_platformCharacterIs, NULL, 0, -1, false },
 };
 #define N_ENTRIES ((int32_t) (sizeof(gEntries) / sizeof(gEntries[0])))
+
+static bool entryMatches(int32_t k) {
+    return k >= 0 && k < N_ENTRIES && gEntries[k].matches;
+}
 
 // The bytecode each native was written from (AM2R 1.5.5).
 #include "n3ds_am2r_native_hashes.h"
@@ -625,6 +797,10 @@ void N3DSAm2rNative_init(Runner* runner) {
         &v_facing, &v_frozen, &v_frozenspr, &v_myspr, &v_flashing, &v_freezetime, &v_fxtimer, &v_malpha, &v_moffx,
         &v_moffy, &v_markfr, &v_mapmarker, &v_guifont1, &v_guifont1a, &v_guifont2, &v_missiles, &v_smissiles, &v_pbombs, &v_classicmode, &v_opshowhud, &v_etanks, &v_playerhealth, &v_maxmissiles, &v_opmslstyle, &v_currentweapon, &v_maxsmissiles, &v_maxpbombs, &v_ophudshowmap, &v_ophudshowmetrcount, &v_mod_etankhealthmult, &v_hudflash, &v_hudflashfx, &v_widescreen_space, &v_state, &v_sjball, &v_armmsl, &v_xoff, &v_etankxoff, &v_monstersarea, &v_monstersleft, &v_widescreen, &v_surf, &v_scale, &v_flying_sprite, &v_yy, &v_xtype };
     for (size_t k = 0; k < sizeof(vars) / sizeof(vars[0]); k++) resolveVar(vars[k]);
+    Var* moveVars[] = { &v_mtXPrev, &v_mtYPrev, &v_time, &v_xVelFrac, &v_yVelFrac, &v_xVelInteger, &v_yVelInteger, &v_ON_GROUND,
+        &v_IN_AIR, &v_ON_LADDER, &v_RUNNING, &v_STANDING, &v_DUCKING, &v_BALL, &v_JUMPING, &v_FALLING, &v_AIRBALL, &v_CLIMBING };
+    for (size_t k = 0; k < sizeof(moveVars) / sizeof(moveVars[0]); k++) resolveVar(moveVars[k]);
+    gObjPlatform = N3DSGml_objectIndex("oPlatform");
     for (int32_t k = 1; k <= 15; k++) {
         snprintf(gMapVarNames[k], sizeof(gMapVarNames[k]), "m%d", (int) k);
         snprintf(gMapVarNames[16 + k], sizeof(gMapVarNames[16 + k]), "dm%d", (int) k);
@@ -671,6 +847,10 @@ void N3DSAm2rNative_init(Runner* runner) {
     gCode_draw_mapblock = gEntries[8].code;
     gCode_draw_gui_map = gEntries[9].code;
     gCode_draw_gui = gEntries[12].code;
+    gCode_moveTo = gEntries[14].code;
+    gCode_isCollisionPlatformBottom = gEntries[15].code;
+    gCode_platformCharacterIs = gEntries[16].code;
+    E_isCollisionPlatformBottom = 15;
     gCode_gui_health = N3DSGml_scriptIndex("gui_health");
     gCode_to_string_lz = N3DSGml_scriptIndex("to_string_lz");
     if (gCode_gui_health < 0 || gCode_to_string_lz < 0) {

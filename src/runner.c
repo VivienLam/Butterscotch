@@ -3736,9 +3736,38 @@ static void dispatchMouseEvents(Runner* runner) {
     // Compute whether the mouse is currently over each instance's mask.
     // Enter / Leave edge detection also updates inst->mouseOver here.
     ResolvedEventTable* table = &runner->eventTable;
+    // Objects with no local mouse event at all (most of them) can skip the point-in-mask test: nothing reads their
+    // mouse-over state (the per-object answer never changes, the event table is static). AM2R has ~300 instances a
+    // room and a single object with a local mouse event; testing them all cost ~7% of a frame.
+    static uint8_t* mouseResponder = nullptr; // per object: 0 unknown, 1 no local mouse event, 2 has one
+    static uint32_t mouseResponderCount = 0;
+    static const DataWin* mouseResponderDataWin = nullptr;
+    if (mouseResponderDataWin != dataWin || mouseResponderCount != dataWin->objt.count) {
+        free(mouseResponder);
+        mouseResponderCount = dataWin->objt.count;
+        mouseResponder = (uint8_t*) safeCalloc(mouseResponderCount > 0 ? mouseResponderCount : 1, 1);
+        mouseResponderDataWin = dataWin;
+    }
+    const int32_t localSlots[12] = { slotLeftBtn, slotRightBtn, slotMiddleBtn, slotNoBtn, slotLeftPress, slotRightPress,
+        slotMiddlePress, slotLeftRel, slotRightRel, slotMiddleRel, slotEnter, slotLeave };
     repeat(instCount, i) {
         Instance* inst = runner->instanceSnapshots[snapshotBase + i];
         if (!inst->active) { isOver[i] = false; continue; }
+
+        if (inst->objectIndex >= 0 && (uint32_t) inst->objectIndex < mouseResponderCount) {
+            uint8_t* known = &mouseResponder[inst->objectIndex];
+            if (*known == 0) {
+                *known = 1;
+                repeat(12, k) {
+                    int32_t owner = -1;
+                    if (localSlots[k] >= 0 && ResolvedEventTable_lookup(table, inst->objectIndex, localSlots[k], &owner) >= 0) {
+                        *known = 2;
+                        break;
+                    }
+                }
+            }
+            if (*known == 1) { isOver[i] = false; continue; }
+        }
 
         Sprite* spr = Collision_getSprite(dataWin, inst);
         bool over = Collision_pointInInstance(spr, inst, mx, my);

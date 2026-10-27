@@ -22,6 +22,9 @@ static uint32_t N3DSAm2rNative_expectedHash(const char* name) {
         { "gml_Object_oEnemy_Draw_0", 0x900b9ce8 },
         { "draw_gui", 0xcd167e8f },
         { "gml_Object_oLightEngine_Other_11", 0x5752b1d6 },
+        { "moveTo", 0x083e4e99 },
+        { "isCollisionPlatformBottom", 0xd69dd806 },
+        { "platformCharacterIs", 0x07c324ff },
     };
     for (size_t k = 0; k < sizeof(kHashes) / sizeof(kHashes[0]); k++) {
         if (strcmp(kHashes[k].name, name) == 0) return kHashes[k].hash;

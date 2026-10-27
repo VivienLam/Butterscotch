@@ -106,10 +106,10 @@ void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) {
 #ifdef ENABLE_SCREENSHOTS
         {"screenshot",          required_argument, nullptr, 's'},
         {"screenshot-at-frame", required_argument, nullptr, 'f'},
-        {"goto-room", required_argument, nullptr, 'm'},
         {"screenshot-surfaces", required_argument, nullptr, 'U'},
         {"screenshot-surfaces-at-frame", required_argument, nullptr, 'V'},
 #endif
+        {"goto-room", required_argument, nullptr, 'm'}, // also headless: room jumps for test runs
         {"headless",            no_argument,       nullptr, 'h'},
         {"print-rooms", no_argument,               nullptr, 'r'},
         {"print-objects", no_argument,             nullptr, 'b'},
