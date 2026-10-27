@@ -64,7 +64,8 @@ jobs:
           tools/n3ds/build.sh build \
             -DN3DS_TOOLS_DIR=/opt/n3ds-tools \
             "-DBUTTERSCOTCH_COMMIT_HASH=${{ steps.commit-info.outputs.hash }}" \
-            "-DBUTTERSCOTCH_COMMIT_DATE=${{ steps.commit-info.outputs.date }}" 2>&1 | tee build.log || {
+            "-DBUTTERSCOTCH_COMMIT_DATE=${{ steps.commit-info.outputs.date }}" \
+            -DENABLE_VM_GML_PROFILER=ON -DN3DS_FRAME_PROFILER=ON 2>&1 | tee build.log || {
             grep -E 'error|undefined reference' build.log | head -20 | while IFS= read -r line; do echo "::error::${line}"; done
             exit 1
           }
