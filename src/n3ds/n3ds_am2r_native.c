@@ -492,7 +492,12 @@ void N3DSAm2rNative_setHiddenStep(bool hidden) {
 #include "n3ds_am2r_native_input.inc"
 #include "n3ds_am2r_native_bg.inc"
 #include "n3ds_aot_rt.inc"
+// The translated scripts are big (tens of thousands of lines): optimised for size, the Old 3DS's memory being the
+// tighter limit (their gain over the interpreter is in the work they skip, not in code layout).
+#pragma GCC push_options
+#pragma GCC optimize("Os")
 #include "n3ds_aot_gen.inc"
+#pragma GCC pop_options
 #define AOT_COUNT ((int32_t) (sizeof(gAotScripts) / sizeof(gAotScripts[0])))
 #define AOT_ENTRY_BASE 1000
 
