@@ -464,9 +464,11 @@ static bool gHiddenStep = false, gHudSkipping = false, gHudSkipOk = false;
 static BuiltinFunc gDrawClearAlphaOriginal = NULL;
 static int32_t gDrawClearAlphaFunc = -1, gObjA4EscapeControl = -1, gCode_oControlStep = -1;
 
+static bool hudAotStep(VMContext* ctx); // oControl's Step running translated (n3ds_aot_rt.inc)
+
 static RValue hook_draw_clear_alpha(VMContext* ctx, RValue* args, int32_t argCount) {
     Instance* self = (Instance*) ctx->currentInstance;
-    if (gHiddenStep && ctx->currentCodeIndex == gCode_oControlStep && self != NULL && self->objectIndex == N.objControl &&
+    if (gHiddenStep && (ctx->currentCodeIndex == gCode_oControlStep || hudAotStep(ctx)) && self != NULL && self->objectIndex == N.objControl &&
         (gObjA4EscapeControl < 0 || VM_findInstanceByTarget(ctx, gObjA4EscapeControl) == NULL)) {
         gHudSkipping = true;
         return RValue_makeUndefined();
@@ -489,6 +491,14 @@ void N3DSAm2rNative_setHiddenStep(bool hidden) {
 #include "n3ds_am2r_native_hud.inc"
 #include "n3ds_am2r_native_input.inc"
 #include "n3ds_am2r_native_bg.inc"
+#include "n3ds_aot_rt.inc"
+#include "n3ds_aot_gen.inc"
+#define AOT_COUNT ((int32_t) (sizeof(gAotScripts) / sizeof(gAotScripts[0])))
+#define AOT_ENTRY_BASE 1000
+
+static bool hudAotStep(VMContext* ctx) {
+    return aot_inEvent(ctx, "gml_Object_oControl_Step_0");
+}
 
 // ===[ Events ]===
 
@@ -759,8 +769,9 @@ static int32_t codeIndexByName(const char* name) {
 
 static void install(bool on) {
     for (ptrdiff_t k = 0; k < arrlen(N.hooks); k++) {
-        NativeEntry* e = &gEntries[N.hooks[k].entry];
-        N.vm->funcCallCache[N.hooks[k].funcIndex].builtin = on ? (void*) e->script : N.hooks[k].original;
+        int32_t entry = N.hooks[k].entry;
+        void* native = entry >= AOT_ENTRY_BASE ? (void*) gAotScripts[entry - AOT_ENTRY_BASE].func : (void*) gEntries[entry].script;
+        N.vm->funcCallCache[N.hooks[k].funcIndex].builtin = on ? native : N.hooks[k].original;
     }
     N.runner->nativeEventCode = on ? N.events : NULL;
     if (gDrawClearAlphaFunc >= 0) {
@@ -950,8 +961,70 @@ void N3DSAm2rNative_init(Runner* runner) {
         }
         if (gDrawClearAlphaOriginal == NULL) gDrawClearAlphaFunc = -1;
     }
+    // Scripts translated to C (n3ds_aot_gen.inc): each one only while its bytecode is the one it was translated from.
+    bool aotOff = false;
+#ifdef BS_AM2R_NATIVES_HOST
+    aotOff = getenv("BS_NOAOT") != NULL; // desktop bench: compare with the interpreter
+#endif
+    for (int32_t k = 0; k < AOT_COUNT && !aotOff; k++) {
+        AotScript* a = &gAotScripts[k];
+#ifdef BS_AM2R_NATIVES_HOST
+        {
+            // Desktop bench: BS_AOT_ONLY / BS_AOT_SKIP = comma-separated names (to find a translation that differs).
+            const char* only = getenv("BS_AOT_ONLY");
+            const char* skip = getenv("BS_AOT_SKIP");
+            char key[160];
+            snprintf(key, sizeof(key), ",%s,", a->name);
+            char list[4096];
+            if (only != NULL) { snprintf(list, sizeof(list), ",%s,", only); if (strstr(list, key) == NULL) continue; }
+            if (skip != NULL) { snprintf(list, sizeof(list), ",%s,", skip); if (strstr(list, key) != NULL) continue; }
+        }
+#endif
+        int32_t code = a->event != NULL ? codeIndexByName(a->name) : N3DSGml_scriptIndex(a->name);
+        if (code < 0) continue;
+        uint32_t expected = N3DSAm2rNative_expectedHash(a->name);
+        if (expected == 0 || codeHash(code) != expected) {
+            logInfo("AM2R natives: %s (C) left to the game's code (bytecode %08lx, written for %08lx)\n", a->name,
+                (unsigned long) codeHash(code), (unsigned long) expected);
+            continue;
+        }
+        bool ok = true;
+        for (int32_t v = 0; v < a->varCount; v++) {
+            resolveVar(&a->vars[v]);
+            if (a->vars[v].id < 0) ok = false;
+        }
+        for (int32_t b = 0; b < a->builtinCount; b++) {
+            a->builtins[b].id = VMBuiltins_resolveBuiltinVarId(a->builtins[b].name);
+            if (a->builtins[b].id < 0) ok = false;
+        }
+        DataWin* dw = runner->dataWin;
+        for (int32_t f = 0; f < a->funcCount; f++) {
+            a->funcs[f] = -1;
+            for (uint32_t i = 0; i < dw->func.functionCount; i++) {
+                if (dw->func.functions[i].name != NULL && strcmp(dw->func.functions[i].name, a->funcNames[f]) == 0) {
+                    a->funcs[f] = (int32_t) i;
+                    break;
+                }
+            }
+            if (a->funcs[f] < 0) ok = false;
+        }
+        if (!ok) {
+            logInfo("AM2R natives: %s (C) left to the game's code (a name it uses is missing)\n", a->name);
+            continue;
+        }
+        N.available++;
+        if (a->event != NULL) {
+            N.events[code] = a->event;
+            continue;
+        }
+        for (uint32_t f = 0; f < N.vm->funcCallCacheCount; f++) {
+            if (dw->func.functions[f].name == NULL || strcmp(dw->func.functions[f].name, a->name) != 0) continue;
+            if (N.vm->funcCallCache[f].scriptCodeIndex != code) continue;
+            arrput(N.hooks, ((typeof(*N.hooks)) { (int32_t) f, AOT_ENTRY_BASE + k, N.vm->funcCallCache[f].builtin }));
+        }
+    }
     N.initialised = true;
-    logInfo("AM2R natives: %ld of %ld match this game\n", (long) N.available, (long) N_ENTRIES);
+    logInfo("AM2R natives: %ld of %ld match this game\n", (long) N.available, (long) (N_ENTRIES + AOT_COUNT));
     install(N.enabled);
 }
 

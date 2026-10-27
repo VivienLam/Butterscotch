@@ -309,6 +309,16 @@ VMContext* VM_create(DataWin* dataWin);
 void VM_reset(VMContext* ctx);
 RValue VM_executeCode(VMContext* ctx, int32_t codeIndex);
 RValue VM_callCodeIndex(VMContext* ctx, int32_t codeIndex, RValue* args, int32_t argCount);
+
+// AOT support (scripts translated to C, src/n3ds/n3ds_aot.c): the interpreter's semantics without its stack.
+RValue VM_aotArithSlow(VMContext* ctx, int32_t opcode, RValue a, RValue b);
+bool VM_aotCmpSlow(VMContext* ctx, RValue a, RValue b, int32_t cmpKind);
+void VM_aotArraySet(VMContext* ctx, RValue* slot, int32_t index, RValue val);
+RValue VM_aotReadVar(VMContext* ctx, int32_t instanceType, int32_t varID, int16_t builtinVarId, const char* name, bool isArray, int32_t arrayIndex);
+void VM_aotWriteVar(VMContext* ctx, int32_t instanceType, int32_t varID, int16_t builtinVarId, const char* name, bool isArray, int32_t arrayIndex, RValue val);
+bool VM_aotWithBegin(VMContext* ctx, int32_t target);
+bool VM_aotWithNext(VMContext* ctx);
+void VM_aotWithBreak(VMContext* ctx);
 void VM_free(VMContext* ctx);
 bool VM_isObjectOrDescendant(DataWin* dataWin, int32_t objectIndex, int32_t targetObjectIndex);
 int32_t VM_resolveInstanceTarget(VMContext* ctx, int32_t target);

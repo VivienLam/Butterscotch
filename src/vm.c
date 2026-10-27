@@ -4654,3 +4654,247 @@ void VM_free(VMContext* ctx) {
     free(ctx);
 #endif
 }
+
+// ===[ AOT support (src/n3ds/n3ds_aot.c) ]===
+// Scripts translated to C (tools/n3ds/aot/gml2c.py) keep the interpreter's semantics by going through these for
+// everything but the plain number cases they inline: the same code as the opcodes, without the VM stack.
+
+// Arithmetic on anything but two INT32/REAL operands (strings, int64, undefined...): the opcode's slow path. The
+// operands are copied, the caller keeps its own.
+RValue VM_aotArithSlow(VMContext* ctx, int32_t opcode, RValue a, RValue b) {
+    int32_t top = ctx->stack.top;
+    stackPushTyped(ctx, RValue_makeIndependent(a), GML_TYPE_VARIABLE);
+    stackPushTyped(ctx, RValue_makeIndependent(b), GML_TYPE_VARIABLE);
+    uint32_t instr = ((uint32_t) opcode << 24) | ((uint32_t) GML_TYPE_VARIABLE << 20) | ((uint32_t) GML_TYPE_VARIABLE << 16);
+    switch (opcode) {
+        case OP_ADD: case OP_SUB: case OP_MUL: {
+            RValue y = stackPop(ctx);
+            RValue x = stackPop(ctx);
+            if (opcode == OP_ADD && (x.type == RVALUE_STRING || y.type == RVALUE_STRING)) {
+                handleAddString(ctx, x, y, GML_TYPE_VARIABLE);
+                break;
+            }
+            if (opcode == OP_MUL && x.type == RVALUE_STRING) {
+                handleMulString(ctx, x, y, GML_TYPE_VARIABLE);
+                break;
+            }
+#ifndef NO_RVALUE_INT64
+            if (x.type == RVALUE_INT64 && y.type == RVALUE_INT64) {
+                int64_t r = opcode == OP_ADD ? x.int64 + y.int64 : opcode == OP_SUB ? x.int64 - y.int64 : x.int64 * y.int64;
+                stackPushTyped(ctx, RValue_makeInt64(r), GML_TYPE_VARIABLE);
+                break;
+            }
+#endif
+            GMLReal r = opcode == OP_ADD ? RValue_toReal(x) + RValue_toReal(y)
+                : opcode == OP_SUB ? RValue_toReal(x) - RValue_toReal(y) : RValue_toReal(x) * RValue_toReal(y);
+            RValue_free(&x);
+            RValue_free(&y);
+            stackPushTyped(ctx, RValue_makeReal(r), GML_TYPE_VARIABLE);
+            break;
+        }
+        case OP_DIV: handleDiv(ctx, instr); break;
+        case OP_REM: handleRem(ctx, instr); break;
+        case OP_MOD: handleMod(ctx, instr); break;
+        case OP_AND: handleAnd(ctx, instr); break;
+        case OP_OR:  handleOr(ctx, instr);  break;
+        case OP_XOR: handleXor(ctx, instr); break;
+        case OP_SHL: handleShl(ctx, instr); break;
+        case OP_SHR: handleShr(ctx, instr); break;
+        default: requireMessageFormatted(__FILE__, __LINE__, false, "VM_aotArithSlow: opcode %d", (int) opcode);
+    }
+    RValue result = stackPop(ctx);
+    ctx->stack.top = top;
+    return result;
+}
+
+// Comparison of anything but two numbers (handleCmp, without consuming the operands).
+bool VM_aotCmpSlow(VMContext* ctx, RValue a, RValue b, int32_t cmpKind) {
+    int32_t top = ctx->stack.top;
+    stackPush(ctx, RValue_makeIndependent(a));
+    stackPush(ctx, RValue_makeIndependent(b));
+    uint32_t instr = ((uint32_t) OP_CMP << 24) | ((uint32_t) cmpKind << 8);
+    handleCmp(ctx, instr);
+    RValue r = stackPop(ctx);
+    ctx->stack.top = top;
+    return RValue_toInt32(r) != 0;
+}
+
+void VM_aotArraySet(VMContext* ctx, RValue* slot, int32_t index, RValue val) {
+    VM_arraySetWithCoW(ctx, slot, index, val);
+}
+
+// A variable read through an instance type (Push.v with an object, an instance id, other, global...), as
+// resolveVariableRead does after popping the array access. varID is VARIABLE_BUILTIN for a built-in.
+RValue VM_aotReadVar(VMContext* ctx, int32_t instanceType, int32_t varID, int16_t builtinVarId, const char* name, bool isArray, int32_t arrayIndex) {
+    Instance* targetInstance = (Instance*) ctx->currentInstance;
+    if (instanceType >= 0) {
+        targetInstance = VM_findInstanceByTarget(ctx, instanceType);
+        if (targetInstance == nullptr) {
+            logWarn("VM: [%s] READ var '%s' on %d but no instance found (aot)\n", ctx->currentCodeName, name, instanceType);
+            return RValue_makeReal(0.0);
+        }
+    } else if (instanceType == INSTANCE_GLOBAL) {
+        targetInstance = ctx->globalScopeInstance;
+    } else if (instanceType == INSTANCE_OTHER) {
+        if (ctx->otherInstance != nullptr) targetInstance = (Instance*) ctx->otherInstance;
+    }
+    if (varID == VARIABLE_BUILTIN) {
+        if (VM_builtinIsStructField(ctx, targetInstance, builtinVarId)) {
+            ptrdiff_t nameSlot = shgeti(ctx->varNameMap, (char*) name);
+            if (nameSlot >= 0) {
+                ArrayAccess access = { 0 };
+                access.isArray = isArray;
+                access.arrayIndex = arrayIndex;
+                RValue value;
+                if (tryReadInstanceVarOrStatic(ctx, targetInstance, ctx->varNameMap[nameSlot].value, &access, &value)) return value;
+            }
+            return RValue_makeUndefined();
+        }
+        return VMBuiltins_getVariable(ctx, targetInstance, builtinVarId, name, isArray ? arrayIndex : 0);
+    }
+    if (targetInstance == nullptr) return RValue_makeReal(0.0);
+    RValue* slot = IntRValueHashMap_findSlot(&targetInstance->selfVars, varID);
+    if (slot == nullptr) return RValue_makeUndefined();
+    if (isArray) return GMLArray_getOnArrayRef(slot, arrayIndex);
+    RValue result = *slot;
+    result.ownsReference = false;
+    return result;
+}
+
+// The matching write (resolveVariableWrite): an object index writes every instance of it. The caller keeps val.
+void VM_aotWriteVar(VMContext* ctx, int32_t instanceType, int32_t varID, int16_t builtinVarId, const char* name, bool isArray, int32_t arrayIndex, RValue val) {
+    Variable varDef;
+    memset(&varDef, 0, sizeof(varDef));
+    varDef.name = name;
+    varDef.varID = varID;
+    varDef.builtinVarId = builtinVarId;
+    ArrayAccess access = { 0 };
+    access.isArray = isArray;
+    access.arrayIndex = isArray ? arrayIndex : 0;
+    if (instanceType >= 0 && INSTANCE_ID_BASE > instanceType) {
+        Runner* runner = (Runner*) ctx->runner;
+        bool found = false;
+        int32_t snapBase = Runner_pushInstancesOfObject(runner, instanceType);
+        int32_t snapEnd = (int32_t) arrlen(runner->instanceSnapshots);
+        for (int32_t i = snapBase; snapEnd > i; i++) {
+            Instance* inst = runner->instanceSnapshots[i];
+            if (!inst->active) continue;
+            found = true;
+            writeSingleInstanceVariable(ctx, inst, &varDef, &access, val);
+        }
+        Runner_popInstanceSnapshot(runner, snapBase);
+        if (!found) logWarn("VM: [%s] WRITE var '%s' on object %d but no instances found (aot)\n", ctx->currentCodeName, name, instanceType);
+        return;
+    }
+    Instance* targetInstance = (Instance*) ctx->currentInstance;
+    if (instanceType >= 0) {
+        targetInstance = VM_findInstanceByTarget(ctx, instanceType);
+        if (targetInstance == nullptr) {
+            logWarn("VM: [%s] WRITE var '%s' on instance %d but no instance found (aot)\n", ctx->currentCodeName, name, instanceType);
+            return;
+        }
+    } else if (instanceType == INSTANCE_GLOBAL) {
+        targetInstance = ctx->globalScopeInstance;
+    } else if (instanceType == INSTANCE_OTHER) {
+        if (ctx->otherInstance != nullptr) targetInstance = (Instance*) ctx->otherInstance;
+    }
+    if (targetInstance == nullptr) return;
+    writeSingleInstanceVariable(ctx, targetInstance, &varDef, &access, val);
+}
+
+// with (target): PushEnv. True when the body runs (ctx->currentInstance is its first instance); false when it is
+// skipped (call VM_aotWithNext then, as the bytecode's PopEnv runs).
+bool VM_aotWithBegin(VMContext* ctx, int32_t target) {
+    EnvFrame* frame = (EnvFrame *)safeMalloc(sizeof(EnvFrame));
+    frame->savedInstance = (Instance*) ctx->currentInstance;
+    frame->savedOtherInstance = (Instance*) ctx->otherInstance;
+    frame->instanceList = nullptr;
+    frame->currentIndex = 0;
+    frame->parent = ctx->envStack;
+    ctx->envStack = frame;
+    ctx->otherInstance = (Instance*) ctx->currentInstance;
+    Runner* runner = (Runner*) ctx->runner;
+    if (target == INSTANCE_SELF) return true;
+    if (target == INSTANCE_OTHER) {
+        if (frame->parent != nullptr) switchToInstance(ctx, frame->parent->savedInstance);
+        else if (frame->savedOtherInstance != nullptr) switchToInstance(ctx, frame->savedOtherInstance);
+        return true;
+    }
+    if (target == INSTANCE_NOONE) return false;
+    if (target == INSTANCE_ALL) {
+        int32_t instanceCount = (int32_t) arrlen(runner->instances);
+        for (int32_t i = 0; instanceCount > i; i++) {
+            Instance* inst = runner->instances[i];
+            if (inst->active) arrput(frame->instanceList, inst);
+        }
+        if (arrlen(frame->instanceList) == 0) return false;
+        switchToInstance(ctx, frame->instanceList[0]);
+        return true;
+    }
+    if (target >= 0 && INSTANCE_ID_BASE > target) {
+        if (ctx->dataWin->objt.count > (uint32_t) target) {
+            Instance** source = runner->instancesByObject[target];
+            int32_t sourceCount = (int32_t) arrlen(source);
+            Instance** activeInstances = nullptr;
+            repeat(sourceCount, i) {
+                if (source[i]->active) arrput(activeInstances, source[i]);
+            }
+            int32_t activeSourceCount = arrlen(activeInstances);
+            if (activeSourceCount == 1) {
+                arrput(frame->instanceList, activeInstances[0]);
+            } else if (activeSourceCount == 2) {
+                arrput(frame->instanceList, activeInstances[0]);
+                arrput(frame->instanceList, activeInstances[1]);
+            } else {
+                for (int32_t i = activeSourceCount - 1; i >= 0; i--) arrput(frame->instanceList, activeInstances[i]);
+            }
+            arrfree(activeInstances);
+        }
+        if (arrlen(frame->instanceList) == 0) return false;
+        switchToInstance(ctx, frame->instanceList[0]);
+        return true;
+    }
+    if (target >= INSTANCE_ID_BASE) {
+        Instance* inst = hmget(runner->instancesById, target);
+        if (inst != nullptr && inst->active) {
+            switchToInstance(ctx, inst);
+            return true;
+        }
+        return false;
+    }
+    logWarn("VM: [%s] PushEnv with unhandled target %d (aot)\n", ctx->currentCodeName, target);
+    return false;
+}
+
+// PopEnv: true to run the body again (next instance), false when done (the frame is popped).
+bool VM_aotWithNext(VMContext* ctx) {
+    EnvFrame* frame = ctx->envStack;
+    require(frame != nullptr);
+    if (frame->instanceList != nullptr && arrlen(frame->instanceList) > frame->currentIndex + 1) {
+        frame->currentIndex++;
+        Instance* nextInst = frame->instanceList[frame->currentIndex];
+        while (!nextInst->active && arrlen(frame->instanceList) > frame->currentIndex + 1) {
+            frame->currentIndex++;
+            nextInst = frame->instanceList[frame->currentIndex];
+        }
+        if (nextInst->active) {
+            switchToInstance(ctx, nextInst);
+            return true;
+        }
+    }
+    restoreEnvContext(ctx, frame);
+    ctx->envStack = frame->parent;
+    arrfree(frame->instanceList);
+    free(frame);
+    return false;
+}
+
+// break out of a with: PopEnv's exit form.
+void VM_aotWithBreak(VMContext* ctx) {
+    EnvFrame* frame = ctx->envStack;
+    require(frame != nullptr);
+    restoreEnvContext(ctx, frame);
+    ctx->envStack = frame->parent;
+    arrfree(frame->instanceList);
+    free(frame);
+}
