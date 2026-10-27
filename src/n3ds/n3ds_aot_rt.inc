@@ -20,6 +20,9 @@ typedef struct {
     int32_t funcCount;
 } AotScript;
 
+// The helpers stay out of line: called from tens of thousands of places, inlined they would make the translated
+// code several times bigger (the Old 3DS's memory matters more than a call).
+
 // The translated event running right now (its code name), and the VM's code index when it started: code that
 // checks ctx->currentCodeIndex (the HUD skip) asks here instead. Interpreted code run from inside sets its own index.
 static const char* gAotEventName = NULL;
@@ -56,7 +59,7 @@ static inline RValue aot_intToReal(RValue v) {
 }
 
 // Conv.v.b then BF/BT.
-static inline bool aot_truthy(RValue v) {
+static NOINLINE bool aot_truthy(RValue v) {
     switch (v.type) {
         case RVALUE_INT32: return v.int32 > 0;
         case RVALUE_BOOL: return v.int32 != 0;
@@ -78,7 +81,7 @@ static inline GMLReal aot_real(const RValue* v) {
     return v->type == RVALUE_INT32 ? (GMLReal) v->int32 : v->real;
 }
 
-static inline bool aot_cmp(RValue a, RValue b, int32_t kind) {
+static NOINLINE bool aot_cmp(RValue a, RValue b, int32_t kind) {
     if (aot_isNum(&a) && aot_isNum(&b)) {
         GMLReal diff = aot_real(&a) - aot_real(&b);
         int c = GMLReal_fabs(diff) <= GML_MATH_EPSILON ? 0 : (diff < 0 ? -1 : 1);
@@ -96,7 +99,7 @@ static inline bool aot_cmp(RValue a, RValue b, int32_t kind) {
 }
 
 #define AOT_ARITH(fname, opcode, cop)                                                           \
-    static inline RValue fname(VMContext* ctx, RValue a, RValue b) {                           \
+    static NOINLINE RValue fname(VMContext* ctx, RValue a, RValue b) {                           \
         if (aot_isNum(&a) && aot_isNum(&b)) {                                                  \
             if (a.type == RVALUE_INT32 && b.type == RVALUE_INT32)                              \
                 return RValue_makeInt32((int32_t) ((uint32_t) a.int32 cop (uint32_t) b.int32)); \
@@ -109,7 +112,7 @@ AOT_ARITH(aot_sub, OP_SUB, -)
 AOT_ARITH(aot_mul, OP_MUL, *)
 #undef AOT_ARITH
 
-static inline RValue aot_div(VMContext* ctx, RValue a, RValue b) {
+static NOINLINE RValue aot_div(VMContext* ctx, RValue a, RValue b) {
     if (aot_isNum(&a) && aot_isNum(&b)) return RValue_makeReal(aot_real(&a) / aot_real(&b));
     return VM_aotArithSlow(ctx, OP_DIV, a, b);
 }
@@ -128,7 +131,7 @@ static inline RValue aot_bxor(VMContext* ctx, RValue a, RValue b) { return VM_ao
 static inline RValue aot_shl(VMContext* ctx, RValue a, RValue b) { return VM_aotArithSlow(ctx, OP_SHL, a, b); }
 static inline RValue aot_shr(VMContext* ctx, RValue a, RValue b) { return VM_aotArithSlow(ctx, OP_SHR, a, b); }
 
-static inline RValue aot_neg(RValue a) {
+static NOINLINE RValue aot_neg(RValue a) {
     return RValue_makeReal(-RValue_toReal(a));
 }
 
@@ -146,7 +149,7 @@ static inline RValue aot_arg(RValue* args, int32_t argCount, int32_t n) {
 
 // ---- variables ----
 
-static inline RValue aot_self(Instance* self, const Var* v) {
+static NOINLINE RValue aot_self(Instance* self, const Var* v) {
     RValue* slot = IntRValueHashMap_findSlot(&self->selfVars, v->id);
     if (slot == NULL) return RValue_makeUndefined();
     RValue r = *slot;
@@ -154,66 +157,66 @@ static inline RValue aot_self(Instance* self, const Var* v) {
     return r;
 }
 
-static inline void aot_setSelf(Instance* self, const Var* v, RValue val) {
+static NOINLINE void aot_setSelf(Instance* self, const Var* v, RValue val) {
     Instance_setSelfVar(self, v->id, val);
 }
 
-static inline RValue aot_selfArr(Instance* self, const Var* v, int32_t index) {
+static NOINLINE RValue aot_selfArr(Instance* self, const Var* v, int32_t index) {
     RValue* slot = IntRValueHashMap_findSlot(&self->selfVars, v->id);
     if (slot == NULL) return RValue_makeUndefined();
     return GMLArray_getOnArrayRef(slot, index);
 }
 
-static inline void aot_setSelfArr(VMContext* ctx, Instance* self, const Var* v, int32_t index, RValue val) {
+static NOINLINE void aot_setSelfArr(VMContext* ctx, Instance* self, const Var* v, int32_t index, RValue val) {
     RValue* slot = IntRValueHashMap_getOrInsertUndefined(&self->selfVars, v->id);
     VM_aotArraySet(ctx, slot, index, val);
 }
 
-static inline RValue aot_global(const Var* v) {
+static NOINLINE RValue aot_global(const Var* v) {
     return aot_self(globalScope(), v);
 }
 
-static inline RValue aot_globalArr(const Var* v, int32_t index) {
+static NOINLINE RValue aot_globalArr(const Var* v, int32_t index) {
     return aot_selfArr(globalScope(), v, index);
 }
 
-static inline void aot_setGlobal(const Var* v, RValue val) {
+static NOINLINE void aot_setGlobal(const Var* v, RValue val) {
     Instance_setSelfVar(globalScope(), v->id, val);
 }
 
-static inline void aot_setGlobalArr(VMContext* ctx, const Var* v, int32_t index, RValue val) {
+static NOINLINE void aot_setGlobalArr(VMContext* ctx, const Var* v, int32_t index, RValue val) {
     aot_setSelfArr(ctx, globalScope(), v, index, val);
 }
 
-static inline void aot_setLocal(RValue* local, RValue val) {
+static NOINLINE void aot_setLocal(RValue* local, RValue val) {
     RValue copy = RValue_makeIndependent(val);
     RValue_free(local);
     *local = copy;
 }
 
 // Built-ins on self (index -1: not an array).
-static inline RValue aot_bget(VMContext* ctx, Instance* self, const AotBuiltin* b, int32_t index) {
+static NOINLINE RValue aot_bget(VMContext* ctx, Instance* self, const AotBuiltin* b, int32_t index) {
     return VMBuiltins_getVariable(ctx, self, b->id, b->name, index < 0 ? 0 : index);
 }
 
-static inline void aot_bset(VMContext* ctx, Instance* self, const AotBuiltin* b, int32_t index, RValue val) {
+static NOINLINE void aot_bset(VMContext* ctx, Instance* self, const AotBuiltin* b, int32_t index, RValue val) {
     VMBuiltins_setVariable(ctx, self, b->id, b->name, val, index < 0 ? 0 : index);
 }
 
 // target.<var> (target: an object, an instance id, or -1 self / -2 other).
-static inline RValue aot_tget(VMContext* ctx, RValue target, const Var* v, int32_t index) {
+static NOINLINE RValue aot_tget(VMContext* ctx, RValue target, const Var* v, int32_t index) {
     return VM_aotReadVar(ctx, RValue_toInt32(target), v->id, -1, v->name, index >= 0, index);
 }
 
-static inline void aot_tset(VMContext* ctx, RValue target, const Var* v, int32_t index, RValue val) {
+static NOINLINE void aot_tset(VMContext* ctx, RValue target, const Var* v, int32_t index, RValue val) {
     VM_aotWriteVar(ctx, RValue_toInt32(target), v->id, -1, v->name, index >= 0, index, val);
 }
 
-static inline RValue aot_tbget(VMContext* ctx, RValue target, const AotBuiltin* b, int32_t index) {
+static NOINLINE RValue aot_tbget(VMContext* ctx, RValue target, const AotBuiltin* b, int32_t index) {
     return VM_aotReadVar(ctx, RValue_toInt32(target), VARIABLE_BUILTIN, b->id, b->name, index >= 0, index);
 }
 
-static inline void aot_tbset(VMContext* ctx, RValue target, const AotBuiltin* b, int32_t index, RValue val) {
+static NOINLINE void aot_tbset(VMContext* ctx, RValue target, const AotBuiltin* b, int32_t index, RValue val) {
     VM_aotWriteVar(ctx, RValue_toInt32(target), VARIABLE_BUILTIN, b->id, b->name, index >= 0, index, val);
 }
 
@@ -231,4 +234,50 @@ static RValue aot_call(VMContext* ctx, int32_t funcIndex, RValue* args, int32_t 
     }
     for (int32_t i = 0; i < argCount; i++) RValue_free(&args[i]);
     return result;
+}
+
+// ---- compact forms (gml2c's common shapes) ----
+// a.k.a. aot_cmp(aot_self(inst, a), aot_self(inst2, b), kind): reads of plain variables.
+static NOINLINE bool aot_cmpVV(Instance* ia, const Var* a, Instance* ib, const Var* b, int32_t kind) {
+    return aot_cmp(aot_self(ia, a), aot_self(ib, b), kind);
+}
+
+// A variable against a number literal (int or real: the comparison's result is the same either way).
+static NOINLINE bool aot_cmpVN(Instance* ia, const Var* a, GMLReal n, int32_t kind) {
+    return aot_cmp(aot_self(ia, a), RValue_makeReal(n), kind);
+}
+
+static NOINLINE bool aot_truthyV(Instance* inst, const Var* v) {
+    return aot_truthy(aot_self(inst, v));
+}
+
+// v = <number literal> (Pop.v.i / Pop.v.d: stored as a real).
+static NOINLINE void aot_setVN(Instance* inst, const Var* v, GMLReal n) {
+    Instance_setSelfVar(inst, v->id, RValue_makeReal(n));
+}
+
+// v = w (Pop.v.v of a plain read).
+static NOINLINE void aot_setVV(Instance* inst, const Var* v, Instance* src, const Var* w) {
+    Instance_setSelfVar(inst, v->id, aot_self(src, w));
+}
+
+static RValue aot_arith(VMContext* ctx, int32_t opcode, RValue a, RValue b) {
+    switch (opcode) {
+        case OP_ADD: return aot_add(ctx, a, b);
+        case OP_SUB: return aot_sub(ctx, a, b);
+        default: return aot_mul(ctx, a, b);
+    }
+}
+
+// v op= <int literal> / <real literal>.
+static NOINLINE void aot_opVI(VMContext* ctx, Instance* inst, const Var* v, int32_t opcode, int32_t n) {
+    RValue r = aot_arith(ctx, opcode, aot_self(inst, v), RValue_makeInt32(n));
+    Instance_setSelfVar(inst, v->id, r);
+    RValue_free(&r);
+}
+
+static NOINLINE void aot_opVR(VMContext* ctx, Instance* inst, const Var* v, int32_t opcode, GMLReal n) {
+    RValue r = aot_arith(ctx, opcode, aot_self(inst, v), RValue_makeReal(n));
+    Instance_setSelfVar(inst, v->id, r);
+    RValue_free(&r);
 }

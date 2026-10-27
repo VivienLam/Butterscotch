@@ -1,4 +1,5 @@
 #include "n3ds_renderer.h"
+#include "n3ds_lowmem.h"
 #include "n3ds_prof.h"
 #include "n3ds_platform_config.h"
 #include "n3ds_unimpl.h"
@@ -70,8 +71,8 @@ static inline bool Renderer_isFiniteFloat(float v) { return isfinite(v); }
 // N3DS_ATLAS_IDLE_FRAMES) is kept as long as linear memory has this much left. Evicting in-use pages made a room
 // whose pages don't fit re-import ten of them every few frames (a 14 ms hitch each time). The reserve covers what
 // still needs linear memory later: music stream buffers, the pause screen's frozen frame (512 KB), an indexed page's
-// expansion.
-#define N3DS_ATLAS_LINEAR_RESERVE_BYTES (1792u * 1024u)
+// expansion, and room for 512 KB pages in a fragmented heap (1.75 MB made the title screen's import churn worse).
+#define N3DS_ATLAS_LINEAR_RESERVE_BYTES (3u * 1024u * 1024u)
 #define N3DS_ATLAS_IDLE_FRAMES 60u
 // Old 3DS: big enough for a room's working set of page data, so a page evicted from linear memory comes back
 // from RAM instead of the SD (the heap sat at ~30 MB of 37 in the first area).
@@ -1755,7 +1756,38 @@ static bool N3DSRenderer_loadIndexed8Page(N3DSRenderer* renderer, N3DSLoadedAtla
     return true;
 }
 
+// Low memory (n3ds_lowmem.h): any heap allocation that fails frees cached page data, least recently used first,
+// except the page being loaded (its data may be in use further up the stack).
+static N3DSRenderer* gReclaimRenderer = NULL;
+static uint32_t gReclaimExcludePage = UINT32_MAX;
+
+static size_t N3DSRenderer_reclaimHeap(size_t needed) {
+    N3DSRenderer* renderer = gReclaimRenderer;
+    if (renderer == NULL) return 0;
+    size_t before = renderer->cachedT3xBytes, freed = 0;
+    // A little more than asked: the heap is fragmented, and the next allocation is likely close behind.
+    while (freed < needed + 256u * 1024u) {
+        if (!N3DSRenderer_evictLRUPageBlob(renderer, gReclaimExcludePage)) break;
+        freed = before - renderer->cachedT3xBytes;
+    }
+    if (freed > 0) {
+        fprintf(stderr, "N3DS: low memory, freed %lu KB of page data for %lu bytes\n", (unsigned long) (freed / 1024u),
+            (unsigned long) needed);
+    }
+    return freed;
+}
+
+static bool N3DSRenderer_loadPageInner(N3DSRenderer* renderer, uint32_t pageIndex);
+
 static bool N3DSRenderer_loadPage(N3DSRenderer* renderer, uint32_t pageIndex) {
+    uint32_t savedExclude = gReclaimExcludePage;
+    gReclaimExcludePage = pageIndex;
+    bool ok = N3DSRenderer_loadPageInner(renderer, pageIndex);
+    gReclaimExcludePage = savedExclude;
+    return ok;
+}
+
+static bool N3DSRenderer_loadPageInner(N3DSRenderer* renderer, uint32_t pageIndex) {
     N3DS_ZONE(N3DS_ZONE_PAGE_LOAD);
     if (pageIndex >= renderer->atlasPageCount) return false;
     N3DSLoadedAtlasPage* page = &renderer->atlasPages[pageIndex];
@@ -3572,6 +3604,8 @@ void N3DSRenderer_prewarmRoom(Renderer* base, Runner* runner) {
 }
 
 static void N3DSRenderer_init(Renderer* base, DataWin* dataWin) {
+    gReclaimRenderer = (N3DSRenderer*) base;
+    N3DSLowMem_setReclaim(N3DSRenderer_reclaimHeap);
     N3DSRenderer* renderer = (N3DSRenderer*) base;
     bool isNew3DS = false;
     base->dataWin = dataWin;
@@ -3631,6 +3665,8 @@ static void N3DSRenderer_init(Renderer* base, DataWin* dataWin) {
 }
 
 static void N3DSRenderer_destroy(Renderer* base) {
+    N3DSLowMem_setReclaim(NULL);
+    gReclaimRenderer = NULL;
     N3DSRenderer* renderer = (N3DSRenderer*) base;
     repeat(renderer->atlasPageCount, i) {
         N3DSRenderer_unloadPage(renderer, (uint32_t) i);

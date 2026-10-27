@@ -28,7 +28,34 @@ static struct {
     uint32_t count;
 } gRepeats[N3DS_LOG_REPEAT_SLOTS];
 
+// A crash (data abort, prefetch abort, undefined instruction...) on the main thread: the registers go to the log,
+// written out at once, then the app exits. Its own stack, in case the main one overflowed. pc and lr map to code with
+// the release's am2r.elf (arm-none-eabi-addr2line -e am2r.elf <pc>).
+static u8 gCrashStack[0x2000] __attribute__((aligned(8)));
+
+static void N3DSLog_onCrash(ERRF_ExceptionInfo* excep, CpuRegisters* regs) {
+    if (gLogFile != NULL) {
+        fprintf(gLogFile, "\n[CRASH] exception %d at pc %08lx, lr %08lx, sp %08lx, fault address %08lx (fsr %08lx)\n",
+            (int) excep->type, (unsigned long) regs->pc, (unsigned long) regs->lr, (unsigned long) regs->sp,
+            (unsigned long) excep->far, (unsigned long) excep->fsr);
+        fprintf(gLogFile, "[CRASH] r0 %08lx r1 %08lx r2 %08lx r3 %08lx r4 %08lx r5 %08lx r6 %08lx r7 %08lx\n",
+            (unsigned long) regs->r[0], (unsigned long) regs->r[1], (unsigned long) regs->r[2], (unsigned long) regs->r[3],
+            (unsigned long) regs->r[4], (unsigned long) regs->r[5], (unsigned long) regs->r[6], (unsigned long) regs->r[7]);
+        fflush(gLogFile);
+        // A few return addresses off the stack (the caller chain, roughly).
+        u32* sp = (u32*) regs->sp;
+        fprintf(gLogFile, "[CRASH] stack:");
+        for (int i = 0; i < 48; i++) fprintf(gLogFile, " %08lx", (unsigned long) sp[i]);
+        fprintf(gLogFile, "\n");
+        fflush(gLogFile);
+        fclose(gLogFile);
+        gLogFile = NULL;
+    }
+    svcExitProcess();
+}
+
 void N3DSLog_init(void) {
+    threadOnException(N3DSLog_onCrash, gCrashStack + sizeof(gCrashStack), WRITE_DATA_TO_HANDLER_STACK);
     LightLock_Init(&gLogLock);
     gLogReady = true;
     gLogStartMs = osGetTime();

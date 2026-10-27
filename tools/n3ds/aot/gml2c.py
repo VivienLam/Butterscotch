@@ -425,6 +425,44 @@ class Gen:
         if v[2]:
             self.emit(f'RValue_free(&{v[0]});')
 
+    # ---- compact forms for the common shapes (smaller code; same operations in the same order) ----
+    def simple(self, n):
+        """('V', c_ref) for a plain self/global variable, ('N', c_real) for a number literal; None otherwise."""
+        if n[0] == 'num':
+            return ('N', repr(float(n[1])))
+        if n[0] == 'name':
+            c = self.classify(n[1])
+            if c[0] == 'self':
+                return ('V', f'self, &V[{self.var_index(n[1], False)}]')
+            if c[0] == 'gvar':
+                return ('V', f'globalScope(), &V[{self.var_index(n[1], True)}]')
+            if c[0] == 'const':
+                return ('N', repr(float(c[1])))
+        if n[0] == 'dot' and n[1] == ('name', 'global'):
+            return ('V', f'globalScope(), &V[{self.var_index(n[2], True)}]')
+        return None
+
+    def pure(self, n):
+        """A C RValue expression for an operand that reads nothing but a plain variable or a literal (no side effects,
+        nothing to free), or None."""
+        if n[0] == 'num':
+            return f'RValue_makeInt32({n[1]})' if n[2] else f'RValue_makeReal({repr(float(n[1]))})'
+        if n[0] == 'name':
+            c = self.classify(n[1])
+            if c[0] == 'self':
+                return f'aot_self(self, &V[{self.var_index(n[1], False)}])'
+            if c[0] == 'gvar':
+                return f'aot_global(&V[{self.var_index(n[1], True)}])'
+            if c[0] == 'local':
+                return f'aot_weak(L_{n[1]})'
+            if c[0] == 'const':
+                return f'RValue_makeInt32({c[1]})'
+            if c[0] == 'arg':
+                return f'aot_arg(args, argCount, {c[1]})'
+        if n[0] == 'dot' and n[1] == ('name', 'global'):
+            return f'aot_global(&V[{self.var_index(n[2], True)}])'
+        return None
+
     def expr(self, n):
         k = n[0]
         if k == 'num':
@@ -472,10 +510,28 @@ class Gen:
                 self.emit(f'bool {ta} = {a};')
                 b = self.cond(n[3])
                 return (f'({ta} != ({b}))', 'bool', False)
+            kind = {'==': 'CMP_EQ', '!=': 'CMP_NEQ', '<': 'CMP_LT', '<=': 'CMP_LTE', '>': 'CMP_GT', '>=': 'CMP_GTE'}.get(op)
+            sa, sb = self.simple(n[2]), self.simple(n[3])
+            if kind and sa and sb and sa[0] == 'V':
+                # variable vs variable / number: both are plain reads, so their order doesn't matter
+                fn = 'aot_cmpVV' if sb[0] == 'V' else 'aot_cmpVN'
+                return (f'{fn}({sa[1]}, {sb[1]}, {kind})', 'bool', False)
+            pa, pb = self.pure(n[2]), self.pure(n[3])
+            if pa is not None and pb is not None:
+                # two plain reads / literals: evaluated in place, in order
+                if kind:
+                    return (f'aot_cmp({pa}, {pb}, {kind})', 'bool', False)
+                fn = {'+': 'aot_add', '-': 'aot_sub', '*': 'aot_mul', '/': 'aot_div', '%': 'aot_mod', 'div': 'aot_idiv',
+                      '&': 'aot_band', '|': 'aot_bor', '^': 'aot_bxor', '<<': 'aot_shl', '>>': 'aot_shr'}[op]
+                t = self.new_tmp()
+                self.emit(f'RValue {t} = {fn}(ctx, {pa}, {pb});')
+                return (t, 'rv', True)
             a = self.materialize(self.expr(n[2]))
             b = self.materialize(self.expr(n[3]))
             ar = self.as_rv(a)[0]
             br = self.as_rv(b)[0]
+            if op in ('==', '!=', '<', '<=', '>', '>=') and False:
+                pass
             if op in ('==', '!=', '<', '<=', '>', '>='):
                 kind = {'==': 'CMP_EQ', '!=': 'CMP_NEQ', '<': 'CMP_LT', '<=': 'CMP_LTE', '>': 'CMP_GT', '>=': 'CMP_GTE'}[op]
                 t = self.new_tmp()
@@ -494,6 +550,9 @@ class Gen:
 
     def cond(self, n):
         """A C bool expression for an if/while condition (the bytecode's Conv.v.b + BF)."""
+        sv = self.simple(n)
+        if sv and sv[0] == 'V':
+            return f'aot_truthyV({sv[1]})'
         v = self.expr(n)
         if v[1] == 'bool':
             return v[0]
@@ -619,8 +678,13 @@ class Gen:
         name, args = n[1], n[2]
         # Arguments are evaluated right to left (the bytecode pushes the last one first).
         vals = [None] * len(args)
+        # A plain read / literal can be read when the array is built, if every argument evaluated after it (the
+        # lower indices: they go right to left) is one too.
         for i in range(len(args) - 1, -1, -1):
-            vals[i] = self.materialize(self.as_rv(self.expr(args[i])))
+            p = self.pure(args[i])
+            if p is not None and not all(self.pure(x) is not None for x in args[:i]):
+                p = None
+            vals[i] = (p, 'rv', False) if p is not None else self.materialize(self.as_rv(self.expr(args[i])))
         t = self.new_tmp()
         if args:
             arr = self.new_tmp()
@@ -643,6 +707,22 @@ class Gen:
         return self.as_rv(v)
 
     def assign(self, target, op, rhs):
+        st = self.simple(target) if target[0] in ('name', 'dot') else None
+        if st and st[0] == 'V':
+            sr = self.simple(rhs)
+            if op == '=' and sr:
+                if sr[0] == 'N':
+                    self.emit(f'aot_setVN({st[1]}, {sr[1]});')  # Pop.v.i stores a number as a real
+                else:
+                    self.emit(f'aot_setVV({st[1]}, {sr[1]});')
+                return
+            if op in '+-*' and sr and sr[0] == 'N' and rhs[0] == 'num':
+                opc = {'+': 'OP_ADD', '-': 'OP_SUB', '*': 'OP_MUL'}[op]
+                if rhs[2]:
+                    self.emit(f'aot_opVI(ctx, {st[1]}, {opc}, {int(rhs[1])});')
+                else:
+                    self.emit(f'aot_opVR(ctx, {st[1]}, {opc}, {sr[1]});')
+                return
         if op != '=':
             # a op= b: read a, evaluate b, combine, store
             cur = self.materialize(self.read_lvalue(target) if target[0] in ('dot', 'index') else self.read_scalar(target, '-1'))
