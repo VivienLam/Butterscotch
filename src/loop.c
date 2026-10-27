@@ -1051,6 +1051,8 @@ int loop(CommandLineArgs args, const char *argv0) {
             N3DSAm2rNative_setEnabled(true);
             N3DSAm2rNative_init(runner);
             logInfo("AM2R natives (desktop bench): %d available\n", (int) N3DSAm2rNative_available());
+        } else if (getenv("BS_SAVEAT") != NULL) {
+            N3DSGml_init(runner);
         }
 #endif
 
@@ -1194,6 +1196,23 @@ int loop(CommandLineArgs args, const char *argv0) {
                 static int cgStart = -2;
                 if (cgStart == -2) cgStart = getenv("BS_CGSTART") != NULL ? atoi(getenv("BS_CGSTART")) : -1;
                 if (cgStart >= 0 && runner->frameCount == cgStart) CALLGRIND_TOGGLE_COLLECT;
+            }
+#endif
+#ifdef BS_AM2R_NATIVES_HOST
+            // BS_SAVEAT=<frame>: the game saves to save1 then (save_game("save1"), as a save station does).
+            {
+                static int saveAt = -2;
+                if (saveAt == -2) saveAt = getenv("BS_SAVEAT") != NULL ? atoi(getenv("BS_SAVEAT")) : -1;
+                if (saveAt >= 0 && runner->frameCount == saveAt) {
+                    int32_t sc = N3DSGml_scriptIndex("save_game");
+                    if (sc >= 0) {
+                        RValue a[1] = { RValue_makeOwnedString(safeStrdup("save1")) };
+                        RValue r = N3DSGml_callScript(sc, a, 1);
+                        RValue_free(&r);
+                        RValue_free(&a[0]);
+                        logInfo("Saved to save1 at frame %d (BS_SAVEAT)\n", (int) runner->frameCount);
+                    }
+                }
             }
 #endif
             // --goto-room

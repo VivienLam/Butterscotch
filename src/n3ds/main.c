@@ -54,6 +54,7 @@ u32 __ctru_linear_heap_size = 25u * 1024u * 1024u;
 void N3DSLog_init(void);
 void N3DSLog_close(void);
 void N3DSLog_tick(void);
+void N3DSLog_flushNow(void);
 
 typedef struct {
     bool useCitro2D;
@@ -595,6 +596,31 @@ static void N3DS_vmPeriodic(void) {
 #endif
 }
 
+// Hang watchdog: a frame that doesn't end for 3 s (an endless loop, a deadlock) gets a [HANG] line in the log with
+// where the game was (room, GML code, translated event), written out at once since the main thread won't flush it.
+static volatile uint32_t gWatchFrames = 0;
+static volatile bool gWatchStop = false;
+static Runner* volatile gWatchRunner = NULL;
+static void N3DS_watchdogMain(MAYBE_UNUSED void* arg) {
+    uint32_t lastFrames = gWatchFrames, still = 0, reported = 0;
+    while (!gWatchStop) {
+        svcSleepThread(500000000LL);
+        uint32_t f = gWatchFrames;
+        if (f != lastFrames) { lastFrames = f; still = 0; reported = 0; continue; }
+        still++;
+        if ((still == 6 || still == 20) && reported < 2) {
+            reported++;
+            Runner* runner = gWatchRunner;
+            const char* room = runner != NULL && runner->currentRoom != NULL ? runner->currentRoom->name : "?";
+            const char* code = runner != NULL && runner->vmContext != NULL && runner->vmContext->currentCodeName != NULL ? runner->vmContext->currentCodeName : "?";
+            const char* ev = N3DSAm2rNative_currentEvent();
+            logInfo("[HANG] no frame for %lu s: frame %lu, room %s, GML %s, translated event %s\n", (unsigned long) (still / 2),
+                (unsigned long) f, room, code, ev != NULL ? ev : "-");
+            N3DSLog_flushNow();
+        }
+    }
+}
+
 int main(int argc, char** argv) {
     uint32_t startFpscr = N3DS_useIeeeRounding();
     gfxInitDefault();
@@ -736,6 +762,8 @@ int main(int argc, char** argv) {
     bool deterministic = fileExists(N3DS_SD_DIR "inputs.json");
     if (deterministic) vm->hasFixedSeed = true;
     Runner* runner = Runner_create(dataWin, vm, renderer, fileSystem, audioSystem, deterministic ? 1u : (uint32_t) osGetTime());
+    gWatchRunner = runner;
+    threadCreate(N3DS_watchdogMain, NULL, 0x2000, 0x28, -2, true);
 #ifdef N3DS_ENABLE_AUDIO
     gPumpAudio = audioSystem;
     N3DS_markAudioServiced();
@@ -1074,6 +1102,7 @@ int main(int argc, char** argv) {
         }
 
         N3DSLog_tick();
+        gWatchFrames++;
 
         statsFrames++;
         statsStepMs += stepMs;

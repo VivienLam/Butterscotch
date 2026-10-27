@@ -1052,6 +1052,10 @@ void N3DSAm2rNative_setEnabled(bool enabled) {
     if (N.initialised) install(enabled);
 }
 
+const char* N3DSAm2rNative_currentEvent(void) {
+    return gAotEventName;
+}
+
 bool N3DSAm2rNative_enabled(void) {
     return N.enabled;
 }

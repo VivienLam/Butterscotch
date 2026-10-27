@@ -77,6 +77,14 @@ static void N3DSLog_flushLocked(u64 nowMs) {
     gLastFlushMs = nowMs;
 }
 
+// From any thread: write out what's buffered now (the hang watchdog).
+void N3DSLog_flushNow(void) {
+    if (!gLogReady) return;
+    LightLock_Lock(&gLogLock);
+    N3DSLog_flushLocked(osGetTime());
+    LightLock_Unlock(&gLogLock);
+}
+
 void N3DSLog_tick(void) {
     if (!gLogReady || !gLogDirty) return;
     u64 nowMs = osGetTime();
