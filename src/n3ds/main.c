@@ -45,7 +45,9 @@
 #define N3DS_TOP_SCREEN_H 240
 
 extern u32 __ctru_heap_size;
-u32 __ctru_linear_heap_size = 20u * 1024u * 1024u;
+// 1.5.5's textures (25 MB in data.win, 3x 1.5's) thrashed the atlas pages at 20 MB (2-3 MB left, 30-85 ms of
+// texture uploads a frame in rm_a0h01). The heap peaked at ~33 MB of ~42, so 5 MB move to linear.
+u32 __ctru_linear_heap_size = 25u * 1024u * 1024u;
 
 void N3DSLog_init(void);
 void N3DSLog_close(void);
@@ -591,6 +593,7 @@ int main(int argc, char** argv) {
     bool isNew3DS = false;
     APT_CheckNew3DS(&isNew3DS);
     logInfo("Console: %s, speedup %s\n", isNew3DS ? "New 3DS" : "Old 3DS", isNew3DS ? "on" : "n/a");
+    logInfo("Heaps: app %lu KB, linear %lu KB\n", (unsigned long) (__ctru_heap_size / 1024u), (unsigned long) (__ctru_linear_heap_size / 1024u));
     {
         uint32_t fpscr;
         __asm__ volatile("vmrs %0, fpscr" : "=r"(fpscr));
