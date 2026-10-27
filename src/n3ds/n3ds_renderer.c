@@ -71,7 +71,9 @@ static inline bool Renderer_isFiniteFloat(float v) { return isfinite(v); }
 // whose pages don't fit re-import ten of them every few frames (a 14 ms hitch each time).
 #define N3DS_ATLAS_LINEAR_RESERVE_BYTES (3u * 1024u * 1024u)
 #define N3DS_ATLAS_IDLE_FRAMES 60u
-#define N3DS_MAX_CACHED_T3X_BYTES_OLD3DS (6u * 1024u * 1024u)
+// Old 3DS: big enough for a room's working set of page data, so a page evicted from linear memory comes back
+// from RAM instead of the SD (the heap sat at ~30 MB of 37 in the first area).
+#define N3DS_MAX_CACHED_T3X_BYTES_OLD3DS (9u * 1024u * 1024u)
 #define N3DS_MAX_CACHED_T3X_BYTES_NEW3DS (32u * 1024u * 1024u)
 // Sprite read-ahead: when a sprite frame is drawn, the pages of its next frames are read in the background.
 #define N3DS_READAHEAD_FRAMES 4
@@ -1838,6 +1840,11 @@ static bool N3DSRenderer_ensurePageLoaded(N3DSRenderer* renderer, uint32_t pageI
 
     while (renderer->residentAtlasPageCount >= renderer->residentAtlasPageLimit ||
         renderer->residentAtlasVRAMBytes + pageBytes > renderer->residentAtlasVRAMLimitBytes) {
+        // Old 3DS: the byte budget is soft. Idle pages (Samus's other animations, a door seen a second ago) were
+        // evicted while linear memory still had room, then re-read from the SD on their next use: 70-170 ms
+        // hitches in rm_a0h02. Only free them once linear memory runs short.
+        if (!renderer->isNew3DS && renderer->residentAtlasPageCount < renderer->residentAtlasPageLimit &&
+            linearSpaceFree() > N3DS_ATLAS_LINEAR_RESERVE_BYTES + pageBytes) break;
         if (N3DSRenderer_evictLRUPageIdle(renderer, pageIndex, N3DS_ATLAS_IDLE_FRAMES)) continue;
         if (renderer->residentAtlasPageCount < renderer->residentAtlasPageLimit &&
             linearSpaceFree() > N3DS_ATLAS_LINEAR_RESERVE_BYTES + pageBytes) break;
