@@ -62,7 +62,8 @@ jobs:
           tools/n3ds/build.sh build \
             -DN3DS_TOOLS_DIR=/opt/n3ds-tools \
             "-DBUTTERSCOTCH_COMMIT_HASH=${{ steps.commit-info.outputs.hash }}" \
-            "-DBUTTERSCOTCH_COMMIT_DATE=${{ steps.commit-info.outputs.date }}"
+            "-DBUTTERSCOTCH_COMMIT_DATE=${{ steps.commit-info.outputs.date }}" \
+            -DENABLE_VM_GML_PROFILER=ON -DN3DS_FRAME_PROFILER=ON
           mkdir -p out
           cp build/am2r.cia build/am2r.3dsx out/
           cp build/butterscotch.elf out/am2r.elf
