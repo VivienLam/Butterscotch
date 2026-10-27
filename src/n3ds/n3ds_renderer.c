@@ -73,7 +73,7 @@ static inline bool Renderer_isFiniteFloat(float v) { return isfinite(v); }
 #define N3DS_ATLAS_IDLE_FRAMES 60u
 // Old 3DS: big enough for a room's working set of page data, so a page evicted from linear memory comes back
 // from RAM instead of the SD (the heap sat at ~30 MB of 37 in the first area).
-#define N3DS_MAX_CACHED_T3X_BYTES_OLD3DS (9u * 1024u * 1024u)
+#define N3DS_MAX_CACHED_T3X_BYTES_OLD3DS (7u * 1024u * 1024u)
 #define N3DS_MAX_CACHED_T3X_BYTES_NEW3DS (32u * 1024u * 1024u)
 // Sprite read-ahead: when a sprite frame is drawn, the pages of its next frames are read in the background.
 #define N3DS_READAHEAD_FRAMES 4
@@ -570,6 +570,7 @@ static void N3DSRenderer_freeDirectTextureAsset(N3DSDirectTextureAsset* asset, N
 static void N3DSRenderer_unloadDirectTextureBlob(N3DSDirectTextureAsset* asset, N3DSRenderer* renderer);
 static bool N3DSRenderer_evictLRUDirectAsset(N3DSRenderer* renderer, const N3DSDirectTextureAsset* excludeAsset);
 static bool N3DSRenderer_evictLRUDirectAssetBlob(N3DSRenderer* renderer, const N3DSDirectTextureAsset* excludeAsset);
+static uint8_t* N3DSRenderer_allocBlob(N3DSRenderer* renderer, size_t size, uint32_t excludePageIndex, const N3DSDirectTextureAsset* excludeAsset);
 static void N3DSRenderer_buildDirectAssetMaps(N3DSRenderer* renderer);
 static bool N3DSRenderer_tryDrawDirectMappedSprite(Renderer* base, int32_t tpagIndex, float x, float y, float originX, float originY, float xscale, float yscale, float angleDeg, uint32_t color, float alpha);
 static bool N3DSRenderer_tryResolveDirectFontImage(N3DSRenderer* renderer, int32_t fontIndex, C2D_Image* outImage, Tex3DS_SubTexture* outSubtex);
@@ -1358,7 +1359,7 @@ static bool N3DSRenderer_tryLoadPackedDirectTextureBlob(N3DSRenderer* renderer, 
         if (!N3DSRenderer_evictLRUDirectAssetBlob(renderer, asset)) break;
     }
 
-    uint8_t* blobData = safeMalloc((size_t) entry.dataSize);
+    uint8_t* blobData = N3DSRenderer_allocBlob(renderer, (size_t) entry.dataSize, UINT32_MAX, asset);
     if (blobData == NULL) return false;
 
     if (fseek(renderer->packedDirectAssetFile, (long) entry.dataOffset, SEEK_SET) != 0) {
@@ -1615,6 +1616,20 @@ static bool N3DSRenderer_claimPageBlob(N3DSRenderer* renderer, uint32_t pageInde
     return N3DSRenderer_adoptPageBlob(renderer, pageIndex);
 }
 
+// Page-data and sheet blobs live in the heap next to the game's own data. On Old 3DS the heap has little headroom
+// (~32 MB used of ~37 on the title screen with a save loading), and a failed safeMalloc ended the game. Allocate,
+// and on failure free the least recently used blobs (they reload from the SD if needed again) and retry.
+static uint8_t* N3DSRenderer_allocBlob(N3DSRenderer* renderer, size_t size, uint32_t excludePageIndex, const N3DSDirectTextureAsset* excludeAsset) {
+    for (;;) {
+        uint8_t* data = (uint8_t*) malloc(size);
+        if (data != NULL) return data;
+        if (N3DSRenderer_evictLRUPageBlob(renderer, excludePageIndex)) continue;
+        if (N3DSRenderer_evictLRUDirectAssetBlob(renderer, excludeAsset)) continue;
+        fprintf(stderr, "N3DS: no heap left for a %lu-byte blob\n", (unsigned long) size);
+        return NULL;
+    }
+}
+
 static bool N3DSRenderer_ensurePageBlobLoaded(N3DSRenderer* renderer, uint32_t pageIndex) {
     if (pageIndex >= renderer->atlasPageCount) return false;
     N3DSLoadedAtlasPage* page = &renderer->atlasPages[pageIndex];
@@ -1665,7 +1680,11 @@ static bool N3DSRenderer_ensurePageBlobLoaded(N3DSRenderer* renderer, uint32_t p
         if (!N3DSRenderer_evictLRUPageBlob(renderer, pageIndex)) break;
     }
 
-    page->t3xData = safeMalloc((size_t) size);
+    page->t3xData = N3DSRenderer_allocBlob(renderer, (size_t) size, pageIndex, NULL);
+    if (page->t3xData == NULL) {
+        if (!usingPackedAtlas) fclose(pageFile);
+        return false;
+    }
     page->t3xSize = size;
     if (usingPackedAtlas) {
         fseek(pageFile, (long) dataOffset, SEEK_SET);
@@ -2013,7 +2032,7 @@ static bool N3DSRenderer_ensureDirectTextureBlobLoaded(N3DSRenderer* renderer, N
         if (!N3DSRenderer_evictLRUDirectAssetBlob(renderer, asset)) break;
     }
 
-    uint8_t* blobData = safeMalloc((size_t) size);
+    uint8_t* blobData = N3DSRenderer_allocBlob(renderer, (size_t) size, UINT32_MAX, asset);
     if (blobData == NULL) {
         fclose(file);
         return false;
