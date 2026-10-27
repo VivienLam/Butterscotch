@@ -1061,6 +1061,15 @@ int main(int argc, char** argv) {
                 (unsigned long) (N3DSRenderer_takeTextureSwitches() / statsFrames),
                 runner->currentRoom != NULL ? runner->currentRoom->name : "-",
                 (unsigned long) (mi.uordblks / 1024u), (unsigned long) (linearSpaceFree() / 1024u), (unsigned long) effects);
+#ifdef N3DS_FRAME_PROFILER
+            {
+                double lookupUs, prepUs, tileDrawUs;
+                uint32_t tilesPerFrame;
+                N3DSRenderer_takeTileProbe(&lookupUs, &prepUs, &tileDrawUs, &tilesPerFrame);
+                logInfo("Tiles: %lu drawn/frame, per tile %.1f us lookup, %.1f us preparation, %.1f us citro2d\n",
+                    (unsigned long) tilesPerFrame, lookupUs, prepUs, tileDrawUs);
+            }
+#endif
             statsStartMs = nowMs;
             statsFrames = 0;
             statsStepMs = 0.0;

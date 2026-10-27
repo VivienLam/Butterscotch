@@ -27,6 +27,7 @@ static uint32_t N3DSAm2rNative_expectedHash(const char* name) {
         { "isCollisionPlatformBottom", 0xd69dd806 },
         { "platformCharacterIs", 0x07c324ff },
         { "check_keys", 0x825084dc },
+        { "gml_Object_oBackground_Draw_0", 0x49cac72a },
     };
     for (size_t k = 0; k < sizeof(kHashes) / sizeof(kHashes[0]); k++) {
         if (strcmp(kHashes[k].name, name) == 0) return kHashes[k].hash;

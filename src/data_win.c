@@ -1737,6 +1737,7 @@ static void readRoomTiles(BinaryReader* reader, DataWin* dw, Room* room) {
             tile->scaleY = BinaryReader_readFloat32(reader);
             tile->color = BinaryReader_readUint32(reader);
             tile->alpha = tileAlphaFromColor(tile->color);
+            tile->drawCache = 0;
         }
     } else {
         room->tiles = nullptr;
@@ -1819,6 +1820,7 @@ static void readRoomLayers(BinaryReader* reader, DataWin* dw, Room* room) {
                         tile->scaleY = BinaryReader_readFloat32(reader);
                         tile->color = BinaryReader_readUint32(reader);
                         tile->alpha = tileAlphaFromColor(tile->color);
+                        tile->drawCache = 0;
                     }
                 } else {
                     assets->legacyTiles = nullptr;

@@ -603,6 +603,8 @@ typedef struct {
     float scaleY;
     uint32_t color;
     float alpha;
+    // A renderer's lookup for this tile, cached on first draw (0: not looked up yet). Reset when the tile changes.
+    int32_t drawCache;
 } RoomTile;
 
 typedef enum 

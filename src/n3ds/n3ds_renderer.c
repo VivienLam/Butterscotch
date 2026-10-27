@@ -68,8 +68,10 @@ static inline bool Renderer_isFiniteFloat(float v) { return isfinite(v); }
 #define N3DS_RESIDENT_ATLAS_VRAM_BUDGET_NEW3DS (5120u * 1024u)
 // Atlas pages live in linear memory, not VRAM: past the budget above, a page still in use (drawn within the last
 // N3DS_ATLAS_IDLE_FRAMES) is kept as long as linear memory has this much left. Evicting in-use pages made a room
-// whose pages don't fit re-import ten of them every few frames (a 14 ms hitch each time).
-#define N3DS_ATLAS_LINEAR_RESERVE_BYTES (3u * 1024u * 1024u)
+// whose pages don't fit re-import ten of them every few frames (a 14 ms hitch each time). The reserve covers what
+// still needs linear memory later: music stream buffers, the pause screen's frozen frame (512 KB), an indexed page's
+// expansion.
+#define N3DS_ATLAS_LINEAR_RESERVE_BYTES (1792u * 1024u)
 #define N3DS_ATLAS_IDLE_FRAMES 60u
 // Old 3DS: big enough for a room's working set of page data, so a page evicted from linear memory comes back
 // from RAM instead of the SD (the heap sat at ~30 MB of 37 in the first area).
@@ -4474,6 +4476,35 @@ static bool N3DSRenderer_visibleRoomRect(Renderer* base, float* left, float* top
     return true;
 }
 
+// Profile builds: where a tile's time goes, sampled on one frame in 16 (the timer is a system call).
+#ifdef N3DS_FRAME_PROFILER
+static u64 gTileProbeTicks[3];
+static uint32_t gTileProbeTiles, gTileProbeFrames;
+static bool gTileProbeOn;
+#define N3DS_TILE_PROBE_BEGIN(k) u64 tileProbeStart##k = gTileProbeOn ? svcGetSystemTick() : 0
+#define N3DS_TILE_PROBE_END(k) do { if (gTileProbeOn) { gTileProbeTicks[k] += svcGetSystemTick() - tileProbeStart##k; if ((k) == 0) gTileProbeTiles++; } } while (0)
+// Per tile, in microseconds: lookup, preparation, citro2d. Resets the sums.
+void N3DSRenderer_takeTileProbe(double* lookupUs, double* prepUs, double* drawUs, uint32_t* tilesPerFrame) {
+    double n = gTileProbeTiles > 0 ? (double) gTileProbeTiles : 1.0;
+    double toUs = 1000000.0 / (double) SYSCLOCK_ARM11;
+    *lookupUs = (double) gTileProbeTicks[0] * toUs / n;
+    *prepUs = (double) gTileProbeTicks[1] * toUs / n;
+    *drawUs = (double) gTileProbeTicks[2] * toUs / n;
+    *tilesPerFrame = gTileProbeFrames > 0 ? gTileProbeTiles / gTileProbeFrames : 0;
+    memset(gTileProbeTicks, 0, sizeof(gTileProbeTicks));
+    gTileProbeTiles = 0;
+    gTileProbeFrames = 0;
+}
+static void N3DSRenderer_tileProbeFrame(uint32_t frame) {
+    gTileProbeOn = (frame & 15u) == 0;
+    if (gTileProbeOn) gTileProbeFrames++;
+}
+#else
+#define N3DS_TILE_PROBE_BEGIN(k) do { } while (0)
+#define N3DS_TILE_PROBE_END(k) do { } while (0)
+static void N3DSRenderer_tileProbeFrame(uint32_t frame) { (void) frame; }
+#endif
+
 // The atlas page a tile draws from (its first fragment's), for grouping a depth's tiles by page (see the runner's
 // tile runs): each page switch costs citro2d a draw call.
 static int32_t N3DSRenderer_tileBatchKey(Renderer* base, RoomTile* tile) {
@@ -4536,7 +4567,50 @@ static void N3DSRenderer_drawTile(Renderer* base, RoomTile* tile, float offsetX,
         return;
     }
 
-    N3DSTileAtlasEntry* tileEntry = N3DSRenderer_findTileEntry(renderer, tile);
+    // The tile's atlas entry, looked up once (a hash of five fields per tile and frame otherwise).
+    N3DSTileAtlasEntry* tileEntry = NULL;
+    {
+        N3DS_TILE_PROBE_BEGIN(0);
+        if (tile->drawCache == 0) {
+            uint32_t entryIndex = 0;
+            tileEntry = N3DSRenderer_findTileEntryByKey(renderer, tile->backgroundDefinition, tile->sourceX, tile->sourceY,
+                srcW, srcH, &entryIndex);
+            tile->drawCache = tileEntry != NULL ? (int32_t) entryIndex + 1 : -1;
+        } else if (tile->drawCache > 0 && (uint32_t) tile->drawCache <= renderer->tileEntryCount) {
+            tileEntry = &renderer->tileEntries[tile->drawCache - 1];
+        }
+        N3DS_TILE_PROBE_END(0);
+    }
+    // Common case: one fragment on a page already in memory, scale 1, no tint.
+    if (tileEntry != NULL && tileEntry->fragmentCount == 0 && tileEntry->atlasId < renderer->atlasPageCount &&
+        tile->scaleX == 1.0f && tile->scaleY == 1.0f && N3DSRenderer_isIdentityTint(bgr, alpha) &&
+        tileEntry->width != 0 && tileEntry->height != 0) {
+        N3DSLoadedAtlasPage* page = &renderer->atlasPages[tileEntry->atlasId];
+        if (page->ready) {
+            N3DS_TILE_PROBE_BEGIN(1);
+            page->lastUsedStamp = ++renderer->atlasUseCounter;
+            page->lastUsedFrame = renderer->frameSequence;
+            page->blobLastUsedStamp = ++renderer->blobUseCounter;
+            Tex3DS_SubTexture subtex;
+            N3DSRenderer_fillSubTexture(&subtex, page, tileEntry->x, tileEntry->y, tileEntry->width, tileEntry->height);
+            float x0 = N3DSRenderer_transformScreenX(renderer, drawX);
+            float y0 = N3DSRenderer_transformScreenY(renderer, drawY);
+            float x1 = N3DSRenderer_transformScreenX(renderer, drawX + (float) tileEntry->width);
+            float y1 = N3DSRenderer_transformScreenY(renderer, drawY + (float) tileEntry->height);
+            float sw = x1 - x0, sh = y1 - y0;
+            N3DS_TILE_PROBE_END(1);
+            if (sw <= 0.0f || sh <= 0.0f || N3DSRenderer_isScreenRectOffscreen(renderer, x0, y0, sw, sh)) return;
+            N3DS_TILE_PROBE_BEGIN(2);
+            C2D_Image image = { .tex = &page->texture, .subtex = &subtex };
+            float scaleX = sw / (float) tileEntry->width, scaleY = sh / (float) tileEntry->height;
+            N3DSRenderer_trackTextureUse(renderer, &image);
+            N3DSRenderer_applyTextureFilterForScale(renderer, image.tex, scaleX, scaleY);
+            C2D_DrawImageAt(image, x0, y0, 0.5f, NULL, scaleX, scaleY);
+            N3DSRenderer_noteC2DDraws(renderer, 1u);
+            N3DS_TILE_PROBE_END(2);
+            return;
+        }
+    }
     if (tileEntry != NULL &&
         N3DSRenderer_drawPackedTileEntry(base, renderer, tileEntry, drawX, drawY, tile->scaleX, tile->scaleY, bgr, alpha)) {
         return;
@@ -5799,6 +5873,7 @@ void N3DSRenderer_drawFrozenTop(Renderer* base) {
 static void N3DSRenderer_beginFrame(Renderer* base, int32_t gameW, int32_t gameH, int32_t windowW, int32_t windowH) {
     N3DSRenderer* renderer = (N3DSRenderer*) base;
     renderer->frameSequence++;
+    N3DSRenderer_tileProbeFrame(renderer->frameSequence);
     renderer->gameW = gameW;
     renderer->gameH = gameH;
     renderer->windowW = windowW;

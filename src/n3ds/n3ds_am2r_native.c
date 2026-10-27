@@ -488,6 +488,7 @@ void N3DSAm2rNative_setHiddenStep(bool hidden) {
 
 #include "n3ds_am2r_native_hud.inc"
 #include "n3ds_am2r_native_input.inc"
+#include "n3ds_am2r_native_bg.inc"
 
 // ===[ Events ]===
 
@@ -728,6 +729,7 @@ static NativeEntry gEntries[] = {
     { "isCollisionPlatformBottom", native_isCollisionPlatformBottom, NULL, 0, -1, false },
     { "platformCharacterIs", native_platformCharacterIs, NULL, 0, -1, false },
     { "check_keys", native_check_keys, NULL, 0, -1, false },
+    { "gml_Object_oBackground_Draw_0", NULL, native_oBackground_Draw_0, 0, -1, false },
 };
 #define N_ENTRIES ((int32_t) (sizeof(gEntries) / sizeof(gEntries[0])))
 
@@ -792,6 +794,7 @@ void N3DSAm2rNative_init(Runner* runner) {
     N.drawRectangle = builtin("draw_rectangle");
     N.drawBackgroundExt = builtin("draw_background_ext");
     N.keyboardCheck = builtin("keyboard_check");
+    gDrawBackgroundTiledExt = builtin("draw_background_tiled_ext");
     N.gamepadButtonCheck = builtin("gamepad_button_check");
     N.gamepadIsSupported = builtin("gamepad_is_supported");
     N.gamepadIsConnected = builtin("gamepad_is_connected");
@@ -857,6 +860,8 @@ void N3DSAm2rNative_init(Runner* runner) {
         resolveVar(&v_keybtn[k]);
         if (v_joybtn[k].name != NULL) resolveVar(&v_joybtn[k]);
     }
+    Var* bgVars[] = { &v_bgno, &v_bgid, &v_tile, &v_xratio, &v_yratio, &v_yoff, &v_xscale, &v_yscale, &v_alpha };
+    for (size_t k = 0; k < sizeof(bgVars) / sizeof(bgVars[0]); k++) resolveVar(bgVars[k]);
     Var* inputVars[] = { &v_walk_zone, &v_xjoyx, &v_xjoyy, &v_controltype, &v_opaimstyle, &v_gamepadIndex, &v_opxjoyenable,
         &v_opxjoyvib, &v_vibL, &v_vibR, &v_opxjoydz, &v_joydetected, &v_openablejoy };
     for (size_t k = 0; k < sizeof(inputVars) / sizeof(inputVars[0]); k++) resolveVar(inputVars[k]);

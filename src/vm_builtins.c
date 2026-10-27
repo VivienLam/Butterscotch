@@ -15219,6 +15219,7 @@ static RValue builtin_tile_add(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_
     tile->scaleY = 1.0f;
     tile->color = 0xFFFFFFFFu;
     tile->alpha = 1.0f;
+    tile->drawCache = 0;
     room->tileCount = newCount;
 
     runner->drawableListStructureDirty = true;

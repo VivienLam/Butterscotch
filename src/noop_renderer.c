@@ -53,6 +53,24 @@ static void noopEnsureSurfaceCapacity(NoopRenderer *noop, uint32_t needed) {
 
 // ===[ Vtable stubs ]===
 
+
+// Bench: BS_DRAWTRACE=<file> logs the draw calls of frames BS_DRAWTRACE_FROM..BS_DRAWTRACE_TO (default 0..1e9), to
+// compare two runs' drawing.
+static FILE* gNoopTrace = NULL;
+static int gNoopTraceInit = 0;
+static long gNoopFrame = 0, gNoopTraceFrom = 0, gNoopTraceTo = 1000000000L;
+static FILE* noopTrace(void) {
+    if (!gNoopTraceInit) {
+        gNoopTraceInit = 1;
+        const char* path = getenv("BS_DRAWTRACE");
+        if (path != NULL) gNoopTrace = fopen(path, "w");
+        if (getenv("BS_DRAWTRACE_FROM")) gNoopTraceFrom = atol(getenv("BS_DRAWTRACE_FROM"));
+        if (getenv("BS_DRAWTRACE_TO")) gNoopTraceTo = atol(getenv("BS_DRAWTRACE_TO"));
+    }
+    return gNoopTrace != NULL && gNoopFrame >= gNoopTraceFrom && gNoopFrame <= gNoopTraceTo ? gNoopTrace : NULL;
+}
+#define NOOP_TRACE(...) do { FILE* f_ = noopTrace(); if (f_ != NULL) fprintf(f_, __VA_ARGS__); } while (0)
+
 static void noopInit(Renderer *renderer, DataWin *dataWin) {
     renderer->dataWin = dataWin;
     Matrix4f world;
@@ -69,7 +87,7 @@ static void noopDestroy(Renderer *renderer) {
     free(noop);
 }
 
-static void noopBeginFrame(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t gameW, MAYBE_UNUSED int32_t gameH, MAYBE_UNUSED int32_t windowW, MAYBE_UNUSED int32_t windowH) {}
+static void noopBeginFrame(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t gameW, MAYBE_UNUSED int32_t gameH, MAYBE_UNUSED int32_t windowW, MAYBE_UNUSED int32_t windowH) { gNoopFrame++; NOOP_TRACE("frame %ld\n", gNoopFrame); }
 static void noopEndFrameInit(MAYBE_UNUSED Renderer *renderer) {}
 static void noopEndFrameEnd(MAYBE_UNUSED Renderer *renderer) {}
 static void noopBeginView(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t viewX, MAYBE_UNUSED int32_t viewY, MAYBE_UNUSED int32_t viewW, MAYBE_UNUSED int32_t viewH, MAYBE_UNUSED int32_t portX, MAYBE_UNUSED int32_t portY, MAYBE_UNUSED int32_t portW, MAYBE_UNUSED int32_t portH, MAYBE_UNUSED float viewAngle) {}
@@ -79,8 +97,8 @@ static void noopBeginGUI(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t g
 static void noopSetGuiProjection(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t guiW, MAYBE_UNUSED int32_t guiH, MAYBE_UNUSED int32_t portW, MAYBE_UNUSED int32_t portH, MAYBE_UNUSED bool renderingToUserSurface) {}
 static void noopEndGUI(MAYBE_UNUSED Renderer *renderer) {}
 
-static void noopDrawSprite(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t tpagIndex, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float originX, MAYBE_UNUSED float originY, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED float angleDeg, MAYBE_UNUSED uint32_t color, MAYBE_UNUSED float alpha) {}
-static void noopDrawSpritePart(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t tpagIndex, MAYBE_UNUSED float srcOffX, MAYBE_UNUSED float srcOffY, MAYBE_UNUSED float srcW, MAYBE_UNUSED float srcH, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED float angleDeg, MAYBE_UNUSED float pivotX, MAYBE_UNUSED float pivotY, MAYBE_UNUSED uint32_t color, MAYBE_UNUSED float alpha) {}
+static void noopDrawSprite(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t tpagIndex, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float originX, MAYBE_UNUSED float originY, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED float angleDeg, MAYBE_UNUSED uint32_t color, MAYBE_UNUSED float alpha) { NOOP_TRACE("spr %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %u %.3f\n", (int) tpagIndex, x, y, originX, originY, xscale, yscale, angleDeg, (unsigned) color, alpha); }
+static void noopDrawSpritePart(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t tpagIndex, MAYBE_UNUSED float srcOffX, MAYBE_UNUSED float srcOffY, MAYBE_UNUSED float srcW, MAYBE_UNUSED float srcH, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED float angleDeg, MAYBE_UNUSED float pivotX, MAYBE_UNUSED float pivotY, MAYBE_UNUSED uint32_t color, MAYBE_UNUSED float alpha) { NOOP_TRACE("part %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %u %.3f\n", (int) tpagIndex, srcOffX, srcOffY, srcW, srcH, x, y, xscale, yscale, (unsigned) color, alpha); }
 static void noopDrawSpritePartColor(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t tpagIndex, MAYBE_UNUSED float srcOffX, MAYBE_UNUSED float srcOffY, MAYBE_UNUSED float srcW, MAYBE_UNUSED float srcH, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED float angleDeg, MAYBE_UNUSED float pivotX, MAYBE_UNUSED float pivotY, MAYBE_UNUSED uint32_t color1, MAYBE_UNUSED uint32_t color2, MAYBE_UNUSED uint32_t color3, MAYBE_UNUSED uint32_t color4, MAYBE_UNUSED float alpha) {}
 static void noopDrawSpritePos(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t tpagIndex, MAYBE_UNUSED float x1, MAYBE_UNUSED float y1, MAYBE_UNUSED float x2, MAYBE_UNUSED float y2, MAYBE_UNUSED float x3, MAYBE_UNUSED float y3, MAYBE_UNUSED float x4, MAYBE_UNUSED float y4, MAYBE_UNUSED float alpha) {}
 static void noopDrawRectangle(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED float x1, MAYBE_UNUSED float y1, MAYBE_UNUSED float x2, MAYBE_UNUSED float y2, MAYBE_UNUSED uint32_t color, MAYBE_UNUSED float alpha, MAYBE_UNUSED bool outline) {}
@@ -88,10 +106,10 @@ static void noopDrawRectangleColor(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED
 static void noopDrawLine(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED float x1, MAYBE_UNUSED float y1, MAYBE_UNUSED float x2, MAYBE_UNUSED float y2, MAYBE_UNUSED float width, MAYBE_UNUSED uint32_t color, MAYBE_UNUSED float alpha) {}
 static void noopDrawLineColor(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED float x1, MAYBE_UNUSED float y1, MAYBE_UNUSED float x2, MAYBE_UNUSED float y2, MAYBE_UNUSED float width, MAYBE_UNUSED uint32_t color1, MAYBE_UNUSED uint32_t color2, MAYBE_UNUSED float alpha) {}
 static void noopDrawTriangle(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED float x1, MAYBE_UNUSED float y1, MAYBE_UNUSED float x2, MAYBE_UNUSED float y2, MAYBE_UNUSED float x3, MAYBE_UNUSED float y3, MAYBE_UNUSED uint32_t color1, MAYBE_UNUSED uint32_t color2, MAYBE_UNUSED uint32_t color3, MAYBE_UNUSED float alpha, MAYBE_UNUSED bool outline) {}
-static void noopDrawText(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED const char *text, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED float angleDeg, MAYBE_UNUSED float lineSeparation) {}
-static void noopDrawTextColor(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED const char *text, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED float angleDeg, MAYBE_UNUSED int32_t c1, MAYBE_UNUSED int32_t c2, MAYBE_UNUSED int32_t c3, MAYBE_UNUSED int32_t c4, MAYBE_UNUSED float alpha, MAYBE_UNUSED float lineSeparation) {}
+static void noopDrawText(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED const char *text, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED float angleDeg, MAYBE_UNUSED float lineSeparation) { NOOP_TRACE("text %.3f %.3f [%s]\n", x, y, text); }
+static void noopDrawTextColor(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED const char *text, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED float angleDeg, MAYBE_UNUSED int32_t c1, MAYBE_UNUSED int32_t c2, MAYBE_UNUSED int32_t c3, MAYBE_UNUSED int32_t c4, MAYBE_UNUSED float alpha, MAYBE_UNUSED float lineSeparation) { NOOP_TRACE("textc %.3f %.3f %.3f [%s]\n", x, y, alpha, text); }
 static void noopFlush(MAYBE_UNUSED Renderer *renderer) {}
-static void noopClearScreen(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED uint32_t color, MAYBE_UNUSED float alpha) {}
+static void noopClearScreen(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED uint32_t color, MAYBE_UNUSED float alpha) { NOOP_TRACE("clear %u %.3f\n", (unsigned) color, alpha); }
 
 static int32_t noopCreateSpriteFromSurface(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t surfaceID, MAYBE_UNUSED int32_t x, MAYBE_UNUSED int32_t y, MAYBE_UNUSED int32_t w, MAYBE_UNUSED int32_t h, MAYBE_UNUSED bool removeback, MAYBE_UNUSED bool smooth, MAYBE_UNUSED int32_t xorig, MAYBE_UNUSED int32_t yorig) {
     return -1;
@@ -152,7 +170,7 @@ static void noopGpuSetFog(Renderer *renderer, bool enable, uint32_t color) {
     noop->fogColor = color;
 }
 static void noopDrawTile(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED RoomTile *tile, MAYBE_UNUSED float offsetX, MAYBE_UNUSED float offsetY) {}
-static void noopDrawSpriteTiled(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t tpagIndex, MAYBE_UNUSED float originX, MAYBE_UNUSED float originY, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED bool tileX, MAYBE_UNUSED bool tileY, MAYBE_UNUSED float roomW, MAYBE_UNUSED float roomH, MAYBE_UNUSED uint32_t color, MAYBE_UNUSED float alpha) {}
+static void noopDrawSpriteTiled(MAYBE_UNUSED Renderer *renderer, MAYBE_UNUSED int32_t tpagIndex, MAYBE_UNUSED float originX, MAYBE_UNUSED float originY, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED bool tileX, MAYBE_UNUSED bool tileY, MAYBE_UNUSED float roomW, MAYBE_UNUSED float roomH, MAYBE_UNUSED uint32_t color, MAYBE_UNUSED float alpha) { NOOP_TRACE("tiled %d %.3f %.3f %.3f %.3f %.3f %.3f %u %.3f\n", (int) tpagIndex, originX, originY, x, y, xscale, yscale, (unsigned) color, alpha); }
 
 static int32_t noopCreateSurface(Renderer *renderer, int32_t width, int32_t height) {
     NoopRenderer *noop = (NoopRenderer *)renderer;
@@ -169,6 +187,7 @@ static bool noopSurfaceExists(Renderer *renderer, int32_t surfaceID) {
     return noop->surfaceExistsFlag[surfaceID];
 }
 static bool noopSetRenderTarget(MAYBE_UNUSED Renderer *renderer, int32_t surfaceID, MAYBE_UNUSED bool implicitApplicationSurface) {
+    NOOP_TRACE("target %d\n", (int) surfaceID);
     if (surfaceID == APPLICATION_SURFACE_ID || surfaceID == RENDER_TARGET_HOST_FRAMEBUFFER) return true;
     return noopSurfaceExists(renderer, surfaceID);
 }
