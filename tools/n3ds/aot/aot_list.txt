@@ -105,3 +105,12 @@ oA3Slasher:8:0
 oErisPipe:8:0
 oA8RedLight:8:0
 oTPO:3:0
+crypt
+reset_map
+sv6_get_map
+readline
+sv6_load_details
+sv6_load
+rc4
+sv6_get_main
+init_map

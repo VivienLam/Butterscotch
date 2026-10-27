@@ -579,6 +579,22 @@ static void N3DS_aptHook(APT_HookType hook, MAYBE_UNUSED void* param) {
     if (hook == APTHOOK_ONWAKEUP || hook == APTHOOK_ONRESTORE) gN3DSResumed = true;
 }
 
+// A frame that runs long (a save loading: 1.5 s of GML) left the music without new buffers, so it stuttered.
+// The VM calls this every few hundred function calls; past 25 ms since the last audio update, the streams are
+// refilled.
+static AudioSystem* gPumpAudio = NULL;
+static u64 gLastAudioServiceTick = 0;
+static void N3DS_markAudioServiced(void) { gLastAudioServiceTick = svcGetSystemTick(); }
+static void N3DS_vmPeriodic(void) {
+    if (gPumpAudio == NULL) return;
+    u64 now = svcGetSystemTick();
+    if (now - gLastAudioServiceTick < (u64) (SYSCLOCK_ARM11 / 40)) return;
+    gLastAudioServiceTick = now;
+#ifdef N3DS_ENABLE_AUDIO
+    N3DSAudio_pumpStreams(gPumpAudio);
+#endif
+}
+
 int main(int argc, char** argv) {
     uint32_t startFpscr = N3DS_useIeeeRounding();
     gfxInitDefault();
@@ -720,6 +736,11 @@ int main(int argc, char** argv) {
     bool deterministic = fileExists(N3DS_SD_DIR "inputs.json");
     if (deterministic) vm->hasFixedSeed = true;
     Runner* runner = Runner_create(dataWin, vm, renderer, fileSystem, audioSystem, deterministic ? 1u : (uint32_t) osGetTime());
+#ifdef N3DS_ENABLE_AUDIO
+    gPumpAudio = audioSystem;
+    N3DS_markAudioServiced();
+    VM_periodicHook = N3DS_vmPeriodic;
+#endif
 
     if (!N3DSRenderer_isReady(renderer)) {
         const char* error = N3DSRenderer_getStartupError(renderer);
@@ -842,6 +863,7 @@ int main(int argc, char** argv) {
         if (0.0f > dt) dt = 0.0f;
         if (dt > 0.1f) dt = 0.1f;
         runner->audioSystem->vtable->update(runner->audioSystem, dt);
+        N3DS_markAudioServiced();
         // The frameskip's other step(s), with their own input; not once a room change is pending (it happens after
         // the frame's drawing, below).
         for (int32_t extra = 1; extra < stepsPerFrame && runner->pendingRoom < 0 && !runner->shouldExit; extra++) {
@@ -859,6 +881,7 @@ int main(int argc, char** argv) {
                 N3DSAm2r_update();
             }
             runner->audioSystem->vtable->update(runner->audioSystem, dt);
+            N3DS_markAudioServiced();
         }
         double stepMs = (double) (svcGetSystemTick() - stepStartTick) * 1000.0 / (double) SYSCLOCK_ARM11;
         bool frameOpenedInStep = !frameOpenBeforeStep && N3DSRenderer_frameIsOpen();

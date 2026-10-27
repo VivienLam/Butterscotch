@@ -223,6 +223,7 @@ static NOINLINE void aot_tbset(VMContext* ctx, RValue target, const AotBuiltin* 
 // ---- calls (handleCall): the arguments' owned values are freed, as the VM does ----
 
 static RValue aot_call(VMContext* ctx, int32_t funcIndex, RValue* args, int32_t argCount) {
+    VM_periodicTick();
     RValue result;
     FuncCallCache* cache = &ctx->funcCallCache[funcIndex];
     if (cache->builtin != NULL) {

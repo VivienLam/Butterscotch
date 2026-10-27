@@ -362,7 +362,14 @@ static bool N3DSAudio_readFileFully(const char* path, uint8_t** outData, uint32_
         return false;
     }
 
-    uint8_t* data = safeMalloc((size_t) size);
+    // Plain malloc: this runs on the prewarm worker too, where a full heap can't be made room for (only the main
+    // thread can free cached pages); the sound is then simply not cached ahead (it was a fatal error: game over
+    // after a few minutes of play, heap at 32 of 36 MB).
+    uint8_t* data = malloc((size_t) size);
+    if (data == NULL) {
+        fclose(file);
+        return false;
+    }
     if (fread(data, 1, (size_t) size, file) != (size_t) size) {
         fclose(file);
         free(data);
@@ -3111,6 +3118,69 @@ static bool N3DSAudio_finishStreamStartLocked(N3DSAudioSystem* audio, N3DSSoundI
     return true;
 }
 
+// Recycles a stream's played buffers and queues the next ones (audio->lock held). True if any is still queued.
+static bool N3DSAudio_serviceStreamBuffersLocked(N3DSAudioSystem* audio, N3DSSoundInstance* inst) {
+    bool anyQueued = false;
+    repeat(N3DS_STREAM_BUFFER_COUNT, bufferIndex) {
+        ndspWaveBuf* waveBuf = &inst->waveBufs[bufferIndex];
+        bool secondaryReadyToReuse = true;
+        if (inst->useNativeAdpcm && inst->secondaryChannelId >= 0) {
+            secondaryReadyToReuse = inst->secondaryWaveBufs[bufferIndex].status == NDSP_WBUF_DONE;
+        }
+        if (waveBuf->status == NDSP_WBUF_DONE && secondaryReadyToReuse) {
+            waveBuf->status = NDSP_WBUF_FREE;
+            if (inst->useNativeAdpcm && inst->secondaryChannelId >= 0) {
+                inst->secondaryWaveBufs[bufferIndex].status = NDSP_WBUF_FREE;
+            }
+        }
+        if (waveBuf->status == NDSP_WBUF_FREE &&
+            inst->asyncFill.ready &&
+            inst->asyncFill.bufferIndex == (int) bufferIndex) {
+            N3DSAudio_applyAsyncFillLocked(audio, inst);
+        }
+        if (waveBuf->status == NDSP_WBUF_FREE &&
+            !inst->streamFinished &&
+            !inst->asyncFill.requested &&
+            !inst->asyncFill.inProgress &&
+            !inst->asyncFill.ready) {
+            if (audio->workerEnabled) N3DSAudio_requestAsyncFillLocked(audio, inst, (int) bufferIndex);
+            else {
+                bool refilled = inst->useNativeAdpcm ?
+                    N3DSAudio_fillNativeStreamWaveBuf(inst, (int) bufferIndex) :
+                    N3DSAudio_fillStreamWaveBuf(inst, (int) bufferIndex);
+                if (!inst->streamFinished && refilled) {
+                    ndspChnWaveBufAdd(inst->channelId, waveBuf);
+                    if (inst->useNativeAdpcm && inst->secondaryChannelId >= 0) {
+                        ndspChnWaveBufAdd(inst->secondaryChannelId, &inst->secondaryWaveBufs[bufferIndex]);
+                    }
+                }
+            }
+        }
+        bool primaryBusy = waveBuf->status != NDSP_WBUF_FREE;
+        bool secondaryBusy = inst->useNativeAdpcm &&
+            inst->secondaryChannelId >= 0 &&
+            inst->secondaryWaveBufs[bufferIndex].status != NDSP_WBUF_FREE;
+        if (primaryBusy || secondaryBusy) {
+            anyQueued = true;
+        }
+    }
+    return anyQueued;
+}
+
+// Only the streams' buffers, between frames that take long (N3DSAudio_pumpStreams): no fades, starts or releases,
+// which stay with the frame's own update.
+void N3DSAudio_pumpStreams(AudioSystem* base) {
+    N3DSAudioSystem* audio = (N3DSAudioSystem*) base;
+    if (audio == NULL) return;
+    LightLock_Lock(&audio->lock);
+    repeat(N3DS_MAX_SOUND_INSTANCES, i) {
+        N3DSSoundInstance* inst = &audio->instances[i];
+        if (!inst->active || !inst->isStream || inst->paused || inst->startPending || inst->streamFinished) continue;
+        (void) N3DSAudio_serviceStreamBuffersLocked(audio, inst);
+    }
+    LightLock_Unlock(&audio->lock);
+}
+
 static void N3DSAudio_update(AudioSystem* base, MAYBE_UNUSED float deltaTime) {
     N3DSAudioSystem* audio = (N3DSAudioSystem*) base;
     u64 nowTick = svcGetSystemTick();
@@ -3139,51 +3209,7 @@ static void N3DSAudio_update(AudioSystem* base, MAYBE_UNUSED float deltaTime) {
             continue;
         }
 
-        bool anyQueued = false;
-        repeat(N3DS_STREAM_BUFFER_COUNT, bufferIndex) {
-            ndspWaveBuf* waveBuf = &inst->waveBufs[bufferIndex];
-            bool secondaryReadyToReuse = true;
-            if (inst->useNativeAdpcm && inst->secondaryChannelId >= 0) {
-                secondaryReadyToReuse = inst->secondaryWaveBufs[bufferIndex].status == NDSP_WBUF_DONE;
-            }
-            if (waveBuf->status == NDSP_WBUF_DONE && secondaryReadyToReuse) {
-                waveBuf->status = NDSP_WBUF_FREE;
-                if (inst->useNativeAdpcm && inst->secondaryChannelId >= 0) {
-                    inst->secondaryWaveBufs[bufferIndex].status = NDSP_WBUF_FREE;
-                }
-            }
-            if (waveBuf->status == NDSP_WBUF_FREE &&
-                inst->asyncFill.ready &&
-                inst->asyncFill.bufferIndex == (int) bufferIndex) {
-                N3DSAudio_applyAsyncFillLocked(audio, inst);
-            }
-            if (waveBuf->status == NDSP_WBUF_FREE &&
-                !inst->streamFinished &&
-                !inst->asyncFill.requested &&
-                !inst->asyncFill.inProgress &&
-                !inst->asyncFill.ready) {
-                if (audio->workerEnabled) N3DSAudio_requestAsyncFillLocked(audio, inst, (int) bufferIndex);
-                else {
-                    bool refilled = inst->useNativeAdpcm ?
-                        N3DSAudio_fillNativeStreamWaveBuf(inst, (int) bufferIndex) :
-                        N3DSAudio_fillStreamWaveBuf(inst, (int) bufferIndex);
-                    if (!inst->streamFinished && refilled) {
-                        ndspChnWaveBufAdd(inst->channelId, waveBuf);
-                        if (inst->useNativeAdpcm && inst->secondaryChannelId >= 0) {
-                            ndspChnWaveBufAdd(inst->secondaryChannelId, &inst->secondaryWaveBufs[bufferIndex]);
-                        }
-                    }
-                }
-            }
-            bool primaryBusy = waveBuf->status != NDSP_WBUF_FREE;
-            bool secondaryBusy = inst->useNativeAdpcm &&
-                inst->secondaryChannelId >= 0 &&
-                inst->secondaryWaveBufs[bufferIndex].status != NDSP_WBUF_FREE;
-            if (primaryBusy || secondaryBusy) {
-                anyQueued = true;
-            }
-        }
-
+        bool anyQueued = N3DSAudio_serviceStreamBuffersLocked(audio, inst);
         if (!anyQueued &&
             !inst->asyncFill.requested &&
             !inst->asyncFill.inProgress &&

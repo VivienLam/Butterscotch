@@ -435,4 +435,15 @@ static inline void VM_checkIfVariableShouldBeTracedAndLog(VMContext* ctx, const 
 }
 #endif
 
+// Called every few hundred function calls while GML runs (a platform can keep time-critical work going through a
+// long script: the 3DS refills its music buffers from it while a save loads). NULL: nothing.
+extern void (*VM_periodicHook)(void);
+extern uint32_t VM_periodicHookCounter;
+static inline void VM_periodicTick(void) {
+    if (VM_periodicHook != NULL && ++VM_periodicHookCounter >= 256u) {
+        VM_periodicHookCounter = 0;
+        VM_periodicHook();
+    }
+}
+
 #endif /* _BS_VM_H_ */

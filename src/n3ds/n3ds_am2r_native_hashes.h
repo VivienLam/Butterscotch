@@ -133,6 +133,15 @@ static uint32_t N3DSAm2rNative_expectedHash(const char* name) {
         { "gml_Object_oErisPipe_Draw_0", 0xfbc89bda }, // AOT
         { "gml_Object_oA8RedLight_Draw_0", 0xc367f750 }, // AOT
         { "gml_Object_oTPO_Step_0", 0x05c0cfc3 }, // AOT
+        { "crypt", 0x07e2fddc }, // AOT
+        { "reset_map", 0x4568f74e }, // AOT
+        { "sv6_get_map", 0xc340f353 }, // AOT
+        { "readline", 0x7276f3a4 }, // AOT
+        { "sv6_load_details", 0xc7dc3b31 }, // AOT
+        { "sv6_load", 0x9e107e81 }, // AOT
+        { "rc4", 0xa83dc5af }, // AOT
+        { "sv6_get_main", 0xcab743dd }, // AOT
+        { "init_map", 0xef201b52 }, // AOT
         { "gml_Object_oBackground_Draw_0", 0x49cac72a },
         { "gml_Object_oTitleAnimation_Draw_0", 0x7c755899 },
     };

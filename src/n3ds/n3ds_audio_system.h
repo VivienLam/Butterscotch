@@ -19,5 +19,7 @@ typedef struct Runner Runner;
 #endif
 // Loads the sounds a room is likely to need (call when the room changes).
 void N3DSAudio_prewarmRoom(AudioSystem* audio, Runner* runner);
+// Keeps the music streams fed while a long frame runs (called from the VM's periodic hook).
+void N3DSAudio_pumpStreams(AudioSystem* audio);
 // Sound effects started so far (perf log).
 uint32_t N3DSAudio_effectsStarted(AudioSystem* audio);

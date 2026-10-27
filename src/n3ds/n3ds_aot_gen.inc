@@ -81562,6 +81562,1815 @@ static bool aot_oTPO_Step_0_event(MAYBE_UNUSED Runner* runner, MAYBE_UNUSED Inst
     return true;
 }
 
+// ===[ crypt ]===
+static Var aot_crypt_V[1] = {
+    { NULL, -1, false },
+};
+static AotBuiltin aot_crypt_B[1] = {
+    { "game_id", -1 },
+};
+static const char* aot_crypt_Fnames[17] = {
+    "file_exists",
+    "string",
+    "min",
+    "max",
+    "string_length",
+    "floor",
+    "string_copy",
+    "ord",
+    "string_char_at",
+    "file_bin_open",
+    "file_bin_seek",
+    "file_bin_size",
+    "round",
+    "file_bin_read_byte",
+    "file_bin_position",
+    "file_bin_write_byte",
+    "file_bin_close",
+};
+static int32_t aot_crypt_F[17];
+
+static RValue aot_crypt(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    Var* V = aot_crypt_V;
+    AotBuiltin* B = aot_crypt_B;
+    int32_t* F = aot_crypt_F;
+    (void) V; (void) B; (void) F;
+    RValue ret = RValue_makeReal(0.0); // a script that ends without return gives 0
+    RValue L_keypos = RValue_makeUndefined();
+    RValue L_gmid = RValue_makeUndefined();
+    RValue L_key = RValue_makeUndefined();
+    RValue L_read = RValue_makeUndefined();
+    RValue L_file = RValue_makeUndefined();
+    RValue L_epos = RValue_makeUndefined();
+    RValue L_rate = RValue_makeUndefined();
+    RValue L_keys = RValue_makeUndefined();
+    RValue L_filesize = RValue_makeUndefined();
+    {
+        RValue t2[1] = { aot_arg(args, argCount, 0) };
+        RValue t1 = aot_call(ctx, F[0], t2, 1);
+        RValue t3 = t1;
+        bool t4 = aot_truthy(t3);
+        RValue_free(&t3);
+        if ((!t4)) {
+            {
+                RValue t5 = RValue_makeInt32(-1);
+                RValue_free(&ret); ret = RValue_makeIndependent(t5);
+            }
+            goto done;
+        }
+    }
+    {
+        RValue t6 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_keypos, t6);
+    }
+    {
+        RValue t7 = aot_bget(ctx, self, &B[0], -1);
+        RValue t9[1] = { t7 };
+        RValue t8 = aot_call(ctx, F[1], t9, 1);
+        RValue t10 = t8;
+        aot_setLocal(&L_gmid, t10);
+        RValue_free(&t10);
+    }
+    {
+        RValue t11 = RValue_makeString("");
+        aot_setLocal(&L_key, t11);
+    }
+    {
+        RValue t12 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_read, t12);
+    }
+    {
+        RValue t13 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_file, t13);
+    }
+    {
+        RValue t14 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_epos, t14);
+    }
+    {
+        RValue t16[2] = { aot_arg(args, argCount, 2), RValue_makeInt32(10) };
+        RValue t15 = aot_call(ctx, F[2], t16, 2);
+        RValue t17 = t15;
+        aot_setLocal(&L_rate, t17);
+        RValue_free(&t17);
+    }
+    {
+        RValue t19[2] = { aot_weak(L_rate), RValue_makeInt32(0) };
+        RValue t18 = aot_call(ctx, F[3], t19, 2);
+        RValue t20 = t18;
+        aot_setLocal(&L_rate, t20);
+        RValue_free(&t20);
+    }
+    {
+        RValue t21 = RValue_makeInt32(5);
+        int32_t t22 = RValue_toInt32(t21);
+        for (; t22 > 0; t22--) {
+            {
+                RValue t23 = aot_weak(L_gmid);
+                RValue t24 = t23;
+                RValue t25 = aot_weak(L_gmid);
+                RValue t26 = aot_add(ctx, t24, t25);
+                aot_setLocal(&L_gmid, t26);
+                RValue_free(&t26);
+            }
+        }
+    }
+    {
+        RValue t27 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_epos, t27);
+    }
+    {
+        RValue t28 = aot_bget(ctx, self, &B[0], -1);
+        RValue t30[1] = { t28 };
+        RValue t29 = aot_call(ctx, F[1], t30, 1);
+        RValue t31 = t29;
+        RValue t33[1] = { t31 };
+        RValue t32 = aot_call(ctx, F[4], t33, 1);
+        RValue t34 = t32;
+        RValue t35 = RValue_makeInt32(5);
+        RValue t36 = aot_mul(ctx, t34, t35);
+        RValue_free(&t34);
+        RValue t37 = t36;
+        RValue t39[1] = { t37 };
+        RValue t38 = aot_call(ctx, F[5], t39, 1);
+        RValue t40 = t38;
+        int32_t t41 = RValue_toInt32(t40);
+        RValue_free(&t40);
+        for (; t41 > 0; t41--) {
+            {
+                {
+                    RValue t43[3] = { aot_weak(L_gmid), aot_weak(L_epos), RValue_makeInt32(2) };
+                    RValue t42 = aot_call(ctx, F[6], t43, 3);
+                    RValue t44 = t42;
+                    RValue t46[1] = { t44 };
+                    RValue t45 = aot_call(ctx, F[7], t46, 1);
+                    RValue t47 = t45;
+                    RValue t49[2] = { aot_arg(args, argCount, 1), aot_weak(L_keypos) };
+                    RValue t48 = aot_call(ctx, F[8], t49, 2);
+                    RValue t50 = t48;
+                    RValue t52[1] = { t50 };
+                    RValue t51 = aot_call(ctx, F[7], t52, 1);
+                    RValue t53 = t51;
+                    RValue t54 = aot_div(ctx, aot_weak(L_epos), RValue_makeInt32(3));
+                    RValue t55 = t54;
+                    RValue t57[1] = { t55 };
+                    RValue t56 = aot_call(ctx, F[5], t57, 1);
+                    RValue t58 = t56;
+                    RValue t59 = aot_sub(ctx, t53, t58);
+                    RValue_free(&t53);
+                    RValue_free(&t58);
+                    RValue t60 = t59;
+                    RValue t61 = aot_bxor(ctx, t47, t60);
+                    RValue_free(&t47);
+                    RValue_free(&t60);
+                    RValue t62 = t61;
+                    RValue t63 = aot_weak(L_epos);
+                    VM_aotArraySet(ctx, &L_keys, aot_index(t63), t62);
+                    RValue_free(&t62);
+                }
+                {
+                    RValue t64 = aot_weak(L_keypos);
+                    RValue t65 = t64;
+                    RValue t66 = RValue_makeInt32(1);
+                    RValue t67 = aot_add(ctx, t65, t66);
+                    aot_setLocal(&L_keypos, t67);
+                    RValue_free(&t67);
+                }
+                {
+                    RValue t68 = aot_weak(L_keypos);
+                    RValue t70[1] = { aot_arg(args, argCount, 1) };
+                    RValue t69 = aot_call(ctx, F[4], t70, 1);
+                    RValue t71 = t69;
+                    bool t72 = aot_cmp(t68, t71, CMP_GT);
+                    RValue_free(&t71);
+                    if (t72) {
+                        {
+                            RValue t73 = aot_intToReal(RValue_makeInt32(1));
+                            aot_setLocal(&L_keypos, t73);
+                        }
+                    }
+                }
+                {
+                    RValue t74 = aot_weak(L_epos);
+                    RValue t75 = t74;
+                    RValue t76 = RValue_makeInt32(1);
+                    RValue t77 = aot_add(ctx, t75, t76);
+                    aot_setLocal(&L_epos, t77);
+                    RValue_free(&t77);
+                }
+            }
+        }
+    }
+    {
+        RValue t78 = aot_weak(L_epos);
+        RValue t79 = t78;
+        RValue t80 = RValue_makeInt32(1);
+        RValue t81 = aot_sub(ctx, t79, t80);
+        aot_setLocal(&L_epos, t81);
+        RValue_free(&t81);
+    }
+    {
+        RValue t82 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_keypos, t82);
+    }
+    {
+        RValue t84[2] = { aot_arg(args, argCount, 0), RValue_makeInt32(2) };
+        RValue t83 = aot_call(ctx, F[9], t84, 2);
+        RValue t85 = t83;
+        aot_setLocal(&L_file, t85);
+        RValue_free(&t85);
+    }
+    {
+        RValue t87[2] = { aot_weak(L_file), RValue_makeInt32(0) };
+        RValue t86 = aot_call(ctx, F[10], t87, 2);
+        RValue_free(&t86);
+    }
+    {
+        RValue t89[1] = { aot_weak(L_file) };
+        RValue t88 = aot_call(ctx, F[11], t89, 1);
+        RValue t90 = t88;
+        aot_setLocal(&L_filesize, t90);
+        RValue_free(&t90);
+    }
+    {
+        RValue t91 = aot_weak(L_rate);
+        RValue t92 = t91;
+        RValue t93 = aot_div(ctx, aot_weak(L_filesize), RValue_makeInt32(10000));
+        RValue t94 = t93;
+        RValue t95 = aot_mul(ctx, t92, t94);
+        RValue_free(&t94);
+        aot_setLocal(&L_rate, t95);
+        RValue_free(&t95);
+    }
+    {
+        RValue t97[1] = { aot_weak(L_rate) };
+        RValue t96 = aot_call(ctx, F[12], t97, 1);
+        RValue t98 = t96;
+        aot_setLocal(&L_rate, t98);
+        RValue_free(&t98);
+    }
+    for (;;) {
+        {
+            {
+                RValue t100[1] = { aot_weak(L_file) };
+                RValue t99 = aot_call(ctx, F[13], t100, 1);
+                RValue t101 = t99;
+                aot_setLocal(&L_read, t101);
+                RValue_free(&t101);
+            }
+            {
+                RValue t103[1] = { aot_weak(L_file) };
+                RValue t102 = aot_call(ctx, F[14], t103, 1);
+                RValue t104 = t102;
+                RValue t105 = RValue_makeInt32(1);
+                RValue t106 = aot_sub(ctx, t104, t105);
+                RValue_free(&t104);
+                RValue t107 = t106;
+                RValue t109[2] = { aot_weak(L_file), t107 };
+                RValue t108 = aot_call(ctx, F[10], t109, 2);
+                RValue_free(&t108);
+            }
+            {
+                RValue t110 = aot_weak(L_read);
+                RValue t111 = aot_weak(L_keypos);
+                RValue t112 = GMLArray_getOnArrayRef(&L_keys, aot_index(t111));
+                RValue t113 = t112;
+                RValue t114 = aot_bxor(ctx, t110, t113);
+                RValue t115 = t114;
+                RValue t117[2] = { aot_weak(L_file), t115 };
+                RValue t116 = aot_call(ctx, F[15], t117, 2);
+                RValue_free(&t116);
+            }
+            {
+                RValue t118 = aot_weak(L_keypos);
+                RValue t119 = t118;
+                RValue t120 = RValue_makeInt32(1);
+                RValue t121 = aot_add(ctx, t119, t120);
+                aot_setLocal(&L_keypos, t121);
+                RValue_free(&t121);
+            }
+            {
+                if (aot_cmp(aot_weak(L_keypos), aot_weak(L_epos), CMP_GT)) {
+                    {
+                        RValue t122 = aot_intToReal(RValue_makeInt32(1));
+                        aot_setLocal(&L_keypos, t122);
+                    }
+                }
+            }
+            {
+                RValue t123 = aot_weak(L_rate);
+                bool t124 = aot_truthy(t123);
+                if (t124) {
+                    {
+                        RValue t126[1] = { aot_weak(L_file) };
+                        RValue t125 = aot_call(ctx, F[14], t126, 1);
+                        RValue t127 = t125;
+                        RValue t128 = aot_weak(L_rate);
+                        RValue t129 = aot_add(ctx, t127, t128);
+                        RValue_free(&t127);
+                        RValue t130 = t129;
+                        RValue t132[2] = { aot_weak(L_file), t130 };
+                        RValue t131 = aot_call(ctx, F[10], t132, 2);
+                        RValue_free(&t131);
+                    }
+                }
+            }
+        }
+        RValue t134[1] = { aot_weak(L_file) };
+        RValue t133 = aot_call(ctx, F[14], t134, 1);
+        RValue t135 = t133;
+        RValue t136 = aot_weak(L_filesize);
+        bool t137 = aot_cmp(t135, t136, CMP_GTE);
+        RValue_free(&t135);
+        if (t137) break;
+    }
+    {
+        RValue t139[1] = { aot_weak(L_file) };
+        RValue t138 = aot_call(ctx, F[16], t139, 1);
+        RValue_free(&t138);
+    }
+    {
+        RValue t140 = RValue_makeInt32(1);
+        RValue_free(&ret); ret = RValue_makeIndependent(t140);
+    }
+    goto done;
+    goto done;
+done:
+    RValue_free(&L_keypos);
+    RValue_free(&L_gmid);
+    RValue_free(&L_key);
+    RValue_free(&L_read);
+    RValue_free(&L_file);
+    RValue_free(&L_epos);
+    RValue_free(&L_rate);
+    RValue_free(&L_keys);
+    RValue_free(&L_filesize);
+    return ret;
+}
+
+// ===[ reset_map ]===
+static Var aot_reset_map_V[4] = {
+    { "i", -1, false },
+    { "j", -1, false },
+    { "map", -1, true },
+    { "dmap", -1, true },
+};
+static AotBuiltin aot_reset_map_B[1] = {
+    { NULL, -1 },
+};
+static const char* aot_reset_map_Fnames[2] = {
+    "writelog",
+    "string",
+};
+static int32_t aot_reset_map_F[2];
+
+static RValue aot_reset_map(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    Var* V = aot_reset_map_V;
+    AotBuiltin* B = aot_reset_map_B;
+    int32_t* F = aot_reset_map_F;
+    (void) V; (void) B; (void) F;
+    RValue ret = RValue_makeReal(0.0); // a script that ends without return gives 0
+    {
+        RValue t1 = RValue_makeString("Reset map start");
+        RValue t3[1] = { t1 };
+        RValue t2 = aot_call(ctx, F[0], t3, 1);
+        RValue_free(&t2);
+    }
+    {
+        aot_setVN(self, &V[0], 0.0);
+    }
+    {
+        RValue t4 = RValue_makeInt32(80);
+        int32_t t5 = RValue_toInt32(t4);
+        for (; t5 > 0; t5--) {
+            {
+                {
+                    aot_setVN(self, &V[1], 0.0);
+                }
+                {
+                    RValue t6 = RValue_makeInt32(80);
+                    int32_t t7 = RValue_toInt32(t6);
+                    for (; t7 > 0; t7--) {
+                        {
+                            {
+                                RValue t8 = RValue_makeString("Resetting ");
+                                RValue t10[1] = { aot_self(self, &V[0]) };
+                                RValue t9 = aot_call(ctx, F[1], t10, 1);
+                                RValue t11 = t9;
+                                RValue t12 = aot_add(ctx, t8, t11);
+                                RValue_free(&t11);
+                                RValue t13 = t12;
+                                RValue t14 = RValue_makeString(",");
+                                RValue t15 = aot_add(ctx, t13, t14);
+                                RValue_free(&t13);
+                                RValue t16 = t15;
+                                RValue t18[1] = { aot_self(self, &V[1]) };
+                                RValue t17 = aot_call(ctx, F[1], t18, 1);
+                                RValue t19 = t17;
+                                RValue t20 = aot_add(ctx, t16, t19);
+                                RValue_free(&t16);
+                                RValue_free(&t19);
+                                RValue t21 = t20;
+                                RValue t23[1] = { t21 };
+                                RValue t22 = aot_call(ctx, F[0], t23, 1);
+                                RValue_free(&t22);
+                            }
+                            {
+                                RValue t24 = RValue_makeString("0");
+                                RValue t25 = aot_self(self, &V[0]);
+                                RValue t26 = aot_mul(ctx, t25, RValue_makeInt32(32000));
+                                RValue t27 = aot_self(self, &V[1]);
+                                RValue t28 = aot_add(ctx, t26, t27);
+                                aot_setGlobalArr(ctx, &V[2], aot_index(t28), t24);
+                            }
+                            {
+                                RValue t29 = aot_intToReal(RValue_makeInt32(0));
+                                RValue t30 = aot_self(self, &V[0]);
+                                RValue t31 = aot_mul(ctx, t30, RValue_makeInt32(32000));
+                                RValue t32 = aot_self(self, &V[1]);
+                                RValue t33 = aot_add(ctx, t31, t32);
+                                aot_setGlobalArr(ctx, &V[3], aot_index(t33), t29);
+                            }
+                            {
+                                aot_opVI(ctx, self, &V[1], OP_ADD, 1);
+                            }
+                        }
+                    }
+                }
+                {
+                    aot_opVI(ctx, self, &V[0], OP_ADD, 1);
+                }
+            }
+        }
+    }
+    {
+        RValue t34 = RValue_makeString("Reset map end");
+        RValue t36[1] = { t34 };
+        RValue t35 = aot_call(ctx, F[0], t36, 1);
+        RValue_free(&t35);
+    }
+    goto done;
+done:
+    return ret;
+}
+
+// ===[ sv6_get_map ]===
+static Var aot_sv6_get_map_V[5] = {
+    { "list", -1, false },
+    { "i", -1, false },
+    { "k", -1, false },
+    { "j", -1, false },
+    { "dmap", -1, true },
+};
+static AotBuiltin aot_sv6_get_map_B[1] = {
+    { NULL, -1 },
+};
+static const char* aot_sv6_get_map_Fnames[6] = {
+    "ds_list_create",
+    "file_text_read_string",
+    "base64_decode",
+    "ds_list_read",
+    "readline",
+    "ds_list_clear",
+};
+static int32_t aot_sv6_get_map_F[6];
+
+static RValue aot_sv6_get_map(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    Var* V = aot_sv6_get_map_V;
+    AotBuiltin* B = aot_sv6_get_map_B;
+    int32_t* F = aot_sv6_get_map_F;
+    (void) V; (void) B; (void) F;
+    RValue ret = RValue_makeReal(0.0); // a script that ends without return gives 0
+    {
+        RValue t1 = aot_call(ctx, F[0], NULL, 0);
+        RValue t2 = t1;
+        aot_setSelf(self, &V[0], t2);
+        RValue_free(&t2);
+    }
+    {
+        RValue t4[1] = { aot_arg(args, argCount, 0) };
+        RValue t3 = aot_call(ctx, F[1], t4, 1);
+        RValue t5 = t3;
+        RValue t7[1] = { t5 };
+        RValue t6 = aot_call(ctx, F[2], t7, 1);
+        RValue t8 = t6;
+        RValue t10[2] = { aot_self(self, &V[0]), t8 };
+        RValue t9 = aot_call(ctx, F[3], t10, 2);
+        RValue_free(&t9);
+    }
+    {
+        aot_setVN(self, &V[1], 0.0);
+    }
+    {
+        aot_setVN(self, &V[2], 0.0);
+    }
+    {
+        RValue t11 = RValue_makeInt32(80);
+        int32_t t12 = RValue_toInt32(t11);
+        for (; t12 > 0; t12--) {
+            {
+                {
+                    aot_setVN(self, &V[3], 0.0);
+                }
+                {
+                    RValue t13 = RValue_makeInt32(80);
+                    int32_t t14 = RValue_toInt32(t13);
+                    for (; t14 > 0; t14--) {
+                        {
+                            {
+                                RValue t15 = aot_call(ctx, F[4], NULL, 0);
+                                RValue t16 = t15;
+                                RValue t17 = aot_self(self, &V[2]);
+                                RValue t18 = aot_mul(ctx, t17, RValue_makeInt32(32000));
+                                RValue t19 = aot_self(self, &V[3]);
+                                RValue t20 = aot_add(ctx, t18, t19);
+                                aot_setGlobalArr(ctx, &V[4], aot_index(t20), t16);
+                                RValue_free(&t16);
+                            }
+                            {
+                                aot_opVI(ctx, self, &V[3], OP_ADD, 1);
+                            }
+                        }
+                    }
+                }
+                {
+                    aot_opVI(ctx, self, &V[2], OP_ADD, 1);
+                }
+            }
+        }
+    }
+    {
+        RValue t22[1] = { aot_self(self, &V[0]) };
+        RValue t21 = aot_call(ctx, F[5], t22, 1);
+        RValue_free(&t21);
+    }
+    goto done;
+done:
+    return ret;
+}
+
+// ===[ readline ]===
+static Var aot_readline_V[2] = {
+    { "i", -1, false },
+    { "list", -1, false },
+};
+static AotBuiltin aot_readline_B[1] = {
+    { NULL, -1 },
+};
+static const char* aot_readline_Fnames[1] = {
+    "ds_list_find_value",
+};
+static int32_t aot_readline_F[1];
+
+static RValue aot_readline(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    Var* V = aot_readline_V;
+    AotBuiltin* B = aot_readline_B;
+    int32_t* F = aot_readline_F;
+    (void) V; (void) B; (void) F;
+    RValue ret = RValue_makeReal(0.0); // a script that ends without return gives 0
+    RValue L_value = RValue_makeUndefined();
+    {
+        RValue t2[2] = { aot_self(self, &V[1]), aot_self(self, &V[0]) };
+        RValue t1 = aot_call(ctx, F[0], t2, 2);
+        RValue t3 = t1;
+        aot_setLocal(&L_value, t3);
+        RValue_free(&t3);
+    }
+    {
+        aot_opVI(ctx, self, &V[0], OP_ADD, 1);
+    }
+    {
+        RValue t4 = aot_weak(L_value);
+        RValue_free(&ret); ret = RValue_makeIndependent(t4);
+    }
+    goto done;
+    goto done;
+done:
+    RValue_free(&L_value);
+    return ret;
+}
+
+// ===[ sv6_load_details ]===
+static Var aot_sv6_load_details_V[2] = {
+    { "filename", -1, false },
+    { "fid", -1, false },
+};
+static AotBuiltin aot_sv6_load_details_B[1] = {
+    { NULL, -1 },
+};
+static const char* aot_sv6_load_details_Fnames[12] = {
+    "file_copy",
+    "crypt",
+    "file_text_open_read",
+    "file_text_read_string",
+    "rc4",
+    "file_text_readln",
+    "file_text_close",
+    "show_message_async",
+    "file_delete",
+    "sv6_get_main",
+    "sv6_get_random",
+    "sv6_get_seed",
+};
+static int32_t aot_sv6_load_details_F[12];
+
+static RValue aot_sv6_load_details(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    Var* V = aot_sv6_load_details_V;
+    AotBuiltin* B = aot_sv6_load_details_B;
+    int32_t* F = aot_sv6_load_details_F;
+    (void) V; (void) B; (void) F;
+    RValue ret = RValue_makeReal(0.0); // a script that ends without return gives 0
+    RValue L_header = RValue_makeUndefined();
+    {
+        RValue t1 = aot_arg(args, argCount, 0);
+        aot_setSelf(self, &V[0], t1);
+    }
+    {
+        if (aot_cmp(RValue_makeInt32(-1), RValue_makeInt32(-1), CMP_EQ)) {
+            {
+                {
+                    RValue t2 = aot_self(self, &V[0]);
+                    RValue t3 = RValue_makeString("d");
+                    RValue t4 = aot_add(ctx, t2, t3);
+                    RValue t5 = t4;
+                    RValue t7[2] = { aot_self(self, &V[0]), t5 };
+                    RValue t6 = aot_call(ctx, F[0], t7, 2);
+                    RValue_free(&t6);
+                }
+                {
+                    RValue t8 = RValue_makeInt32(2);
+                    RValue t9 = RValue_makeString("XOR_DFJykQ8xX3PuNnkLt6QviqALOLF8cxIDx1D63DAdph4KGQ4rOJ7");
+                    RValue t10 = aot_self(self, &V[0]);
+                    RValue t11 = RValue_makeString("d");
+                    RValue t12 = aot_add(ctx, t10, t11);
+                    RValue t13 = t12;
+                    RValue t15[3] = { t13, t9, t8 };
+                    RValue t14 = aot_call(ctx, F[1], t15, 3);
+                    RValue_free(&t14);
+                }
+                {
+                    RValue t16 = aot_self(self, &V[0]);
+                    RValue t17 = RValue_makeString("d");
+                    RValue t18 = aot_add(ctx, t16, t17);
+                    RValue t19 = t18;
+                    RValue t21[1] = { t19 };
+                    RValue t20 = aot_call(ctx, F[2], t21, 1);
+                    RValue t22 = t20;
+                    aot_setSelf(self, &V[1], t22);
+                    RValue_free(&t22);
+                }
+            }
+        } else {
+            {
+                RValue t24[1] = { aot_self(self, &V[0]) };
+                RValue t23 = aot_call(ctx, F[2], t24, 1);
+                RValue t25 = t23;
+                aot_setSelf(self, &V[1], t25);
+                RValue_free(&t25);
+            }
+        }
+    }
+    {
+        RValue t26 = RValue_makeString("HEADER_KEY");
+        RValue t28[1] = { aot_self(self, &V[1]) };
+        RValue t27 = aot_call(ctx, F[3], t28, 1);
+        RValue t29 = t27;
+        RValue t31[2] = { t29, t26 };
+        RValue t30 = aot_call(ctx, F[4], t31, 2);
+        RValue t32 = t30;
+        aot_setLocal(&L_header, t32);
+        RValue_free(&t32);
+    }
+    {
+        RValue t34[1] = { aot_self(self, &V[1]) };
+        RValue t33 = aot_call(ctx, F[5], t34, 1);
+        RValue_free(&t33);
+    }
+    {
+        RValue t35 = aot_weak(L_header);
+        RValue t36 = RValue_makeString("[AM2R SaveData V7.0]");
+        bool t37 = aot_cmp(t35, t36, CMP_NEQ);
+        if (t37) {
+            {
+                {
+                    RValue t39[1] = { aot_self(self, &V[1]) };
+                    RValue t38 = aot_call(ctx, F[6], t39, 1);
+                    RValue_free(&t38);
+                }
+                {
+                    RValue t40 = RValue_makeString("Save Data Corrupted");
+                    RValue t42[1] = { t40 };
+                    RValue t41 = aot_call(ctx, F[7], t42, 1);
+                    RValue_free(&t41);
+                }
+                {
+                    if (aot_cmp(RValue_makeInt32(-1), RValue_makeInt32(-1), CMP_EQ)) {
+                        {
+                            RValue t43 = aot_self(self, &V[0]);
+                            RValue t44 = RValue_makeString("d");
+                            RValue t45 = aot_add(ctx, t43, t44);
+                            RValue t46 = t45;
+                            RValue t48[1] = { t46 };
+                            RValue t47 = aot_call(ctx, F[8], t48, 1);
+                            RValue_free(&t47);
+                        }
+                    }
+                }
+                {
+                    RValue t50[1] = { aot_self(self, &V[0]) };
+                    RValue t49 = aot_call(ctx, F[8], t50, 1);
+                    RValue_free(&t49);
+                }
+                {
+                    RValue t51 = RValue_makeInt32(-1);
+                    RValue_free(&ret); ret = RValue_makeIndependent(t51);
+                }
+                goto done;
+            }
+        } else {
+            {
+                {
+                    RValue t53[1] = { aot_self(self, &V[1]) };
+                    RValue t52 = aot_call(ctx, F[9], t53, 1);
+                    RValue_free(&t52);
+                }
+                {
+                    RValue t55[1] = { aot_self(self, &V[1]) };
+                    RValue t54 = aot_call(ctx, F[5], t55, 1);
+                    RValue_free(&t54);
+                }
+                {
+                    RValue t57[1] = { aot_self(self, &V[1]) };
+                    RValue t56 = aot_call(ctx, F[5], t57, 1);
+                    RValue_free(&t56);
+                }
+                {
+                    RValue t59[1] = { aot_self(self, &V[1]) };
+                    RValue t58 = aot_call(ctx, F[5], t59, 1);
+                    RValue_free(&t58);
+                }
+                {
+                    RValue t61[1] = { aot_self(self, &V[1]) };
+                    RValue t60 = aot_call(ctx, F[5], t61, 1);
+                    RValue_free(&t60);
+                }
+                {
+                    RValue t63[1] = { aot_self(self, &V[1]) };
+                    RValue t62 = aot_call(ctx, F[5], t63, 1);
+                    RValue_free(&t62);
+                }
+                {
+                    RValue t65[1] = { aot_self(self, &V[1]) };
+                    RValue t64 = aot_call(ctx, F[5], t65, 1);
+                    RValue_free(&t64);
+                }
+                {
+                    RValue t67[1] = { aot_self(self, &V[1]) };
+                    RValue t66 = aot_call(ctx, F[5], t67, 1);
+                    RValue_free(&t66);
+                }
+                {
+                    RValue t69[1] = { aot_self(self, &V[1]) };
+                    RValue t68 = aot_call(ctx, F[5], t69, 1);
+                    RValue_free(&t68);
+                }
+                {
+                    RValue t71[1] = { aot_self(self, &V[1]) };
+                    RValue t70 = aot_call(ctx, F[10], t71, 1);
+                    RValue_free(&t70);
+                }
+                {
+                    RValue t73[1] = { aot_self(self, &V[1]) };
+                    RValue t72 = aot_call(ctx, F[5], t73, 1);
+                    RValue_free(&t72);
+                }
+                {
+                    RValue t75[1] = { aot_self(self, &V[1]) };
+                    RValue t74 = aot_call(ctx, F[5], t75, 1);
+                    RValue_free(&t74);
+                }
+                {
+                    RValue t77[1] = { aot_self(self, &V[1]) };
+                    RValue t76 = aot_call(ctx, F[11], t77, 1);
+                    RValue_free(&t76);
+                }
+                {
+                    RValue t79[1] = { aot_self(self, &V[1]) };
+                    RValue t78 = aot_call(ctx, F[5], t79, 1);
+                    RValue_free(&t78);
+                }
+                {
+                    RValue t81[1] = { aot_self(self, &V[1]) };
+                    RValue t80 = aot_call(ctx, F[6], t81, 1);
+                    RValue_free(&t80);
+                }
+                {
+                    if (aot_cmp(RValue_makeInt32(-1), RValue_makeInt32(-1), CMP_EQ)) {
+                        {
+                            RValue t82 = aot_self(self, &V[0]);
+                            RValue t83 = RValue_makeString("d");
+                            RValue t84 = aot_add(ctx, t82, t83);
+                            RValue t85 = t84;
+                            RValue t87[1] = { t85 };
+                            RValue t86 = aot_call(ctx, F[8], t87, 1);
+                            RValue_free(&t86);
+                        }
+                    }
+                }
+                {
+                    RValue t88 = RValue_makeInt32(1);
+                    RValue_free(&ret); ret = RValue_makeIndependent(t88);
+                }
+                goto done;
+            }
+        }
+    }
+    goto done;
+done:
+    RValue_free(&L_header);
+    return ret;
+}
+
+// ===[ sv6_load ]===
+static Var aot_sv6_load_V[23] = {
+    { "filename", -1, false },
+    { "fid", -1, false },
+    { "maxhealth", -1, true },
+    { "etanks", -1, true },
+    { "mod_etankhealthmult", -1, false },
+    { "playerhealth", -1, true },
+    { "difficulty", -1, true },
+    { "maxmissiles", -1, true },
+    { "mod_Mstartingcount", -1, false },
+    { "mtanks", -1, true },
+    { "maxsmissiles", -1, true },
+    { "stanks", -1, true },
+    { "maxpbombs", -1, true },
+    { "ptanks", -1, true },
+    { "missiles", -1, true },
+    { "smissiles", -1, true },
+    { "pbombs", -1, true },
+    { "darkness", -1, true },
+    { "timeofday", -1, true },
+    { "roomsSinceLastSpawn", -1, true },
+    { "ingame", -1, true },
+    { "newgame", -1, true },
+    { "start_room", -1, true },
+};
+static AotBuiltin aot_sv6_load_B[1] = {
+    { NULL, -1 },
+};
+static const char* aot_sv6_load_Fnames[27] = {
+    "scr_default_global_items",
+    "load_character_vars",
+    "reset_map",
+    "init_map",
+    "file_copy",
+    "crypt",
+    "file_text_open_read",
+    "file_text_read_string",
+    "rc4",
+    "file_text_readln",
+    "file_text_close",
+    "show_message_async",
+    "file_delete",
+    "room_goto",
+    "sv6_get_main",
+    "sv6_get_items",
+    "sv6_get_events",
+    "sv6_get_logs",
+    "sv6_get_hints",
+    "sv6_get_monsters",
+    "sv6_get_inventory",
+    "sv6_get_map",
+    "sv6_get_random",
+    "sv6_get_trooper_logs",
+    "sv6_get_seed",
+    "set_start_location",
+    "room_change",
+};
+static int32_t aot_sv6_load_F[27];
+
+static RValue aot_sv6_load(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    Var* V = aot_sv6_load_V;
+    AotBuiltin* B = aot_sv6_load_B;
+    int32_t* F = aot_sv6_load_F;
+    (void) V; (void) B; (void) F;
+    RValue ret = RValue_makeReal(0.0); // a script that ends without return gives 0
+    RValue L_header = RValue_makeUndefined();
+    {
+        RValue t1 = aot_call(ctx, F[0], NULL, 0);
+        RValue_free(&t1);
+    }
+    {
+        RValue t2 = aot_call(ctx, F[1], NULL, 0);
+        RValue_free(&t2);
+    }
+    {
+        RValue t3 = aot_call(ctx, F[2], NULL, 0);
+        RValue_free(&t3);
+    }
+    {
+        RValue t4 = aot_call(ctx, F[3], NULL, 0);
+        RValue_free(&t4);
+    }
+    {
+        RValue t5 = aot_arg(args, argCount, 0);
+        aot_setSelf(self, &V[0], t5);
+    }
+    {
+        if (aot_cmp(RValue_makeInt32(-1), RValue_makeInt32(-1), CMP_EQ)) {
+            {
+                {
+                    RValue t6 = aot_self(self, &V[0]);
+                    RValue t7 = RValue_makeString("d");
+                    RValue t8 = aot_add(ctx, t6, t7);
+                    RValue t9 = t8;
+                    RValue t11[2] = { aot_self(self, &V[0]), t9 };
+                    RValue t10 = aot_call(ctx, F[4], t11, 2);
+                    RValue_free(&t10);
+                }
+                {
+                    RValue t12 = RValue_makeInt32(2);
+                    RValue t13 = RValue_makeString("XOR_DFJykQ8xX3PuNnkLt6QviqALOLF8cxIDx1D63DAdph4KGQ4rOJ7");
+                    RValue t14 = aot_self(self, &V[0]);
+                    RValue t15 = RValue_makeString("d");
+                    RValue t16 = aot_add(ctx, t14, t15);
+                    RValue t17 = t16;
+                    RValue t19[3] = { t17, t13, t12 };
+                    RValue t18 = aot_call(ctx, F[5], t19, 3);
+                    RValue_free(&t18);
+                }
+                {
+                    RValue t20 = aot_self(self, &V[0]);
+                    RValue t21 = RValue_makeString("d");
+                    RValue t22 = aot_add(ctx, t20, t21);
+                    RValue t23 = t22;
+                    RValue t25[1] = { t23 };
+                    RValue t24 = aot_call(ctx, F[6], t25, 1);
+                    RValue t26 = t24;
+                    aot_setSelf(self, &V[1], t26);
+                    RValue_free(&t26);
+                }
+            }
+        } else {
+            {
+                RValue t28[1] = { aot_self(self, &V[0]) };
+                RValue t27 = aot_call(ctx, F[6], t28, 1);
+                RValue t29 = t27;
+                aot_setSelf(self, &V[1], t29);
+                RValue_free(&t29);
+            }
+        }
+    }
+    {
+        RValue t30 = RValue_makeString("HEADER_KEY");
+        RValue t32[1] = { aot_self(self, &V[1]) };
+        RValue t31 = aot_call(ctx, F[7], t32, 1);
+        RValue t33 = t31;
+        RValue t35[2] = { t33, t30 };
+        RValue t34 = aot_call(ctx, F[8], t35, 2);
+        RValue t36 = t34;
+        aot_setLocal(&L_header, t36);
+        RValue_free(&t36);
+    }
+    {
+        RValue t38[1] = { aot_self(self, &V[1]) };
+        RValue t37 = aot_call(ctx, F[9], t38, 1);
+        RValue_free(&t37);
+    }
+    {
+        RValue t39 = aot_weak(L_header);
+        RValue t40 = RValue_makeString("[AM2R SaveData V7.0]");
+        bool t41 = aot_cmp(t39, t40, CMP_NEQ);
+        if (t41) {
+            {
+                {
+                    RValue t43[1] = { aot_self(self, &V[1]) };
+                    RValue t42 = aot_call(ctx, F[10], t43, 1);
+                    RValue_free(&t42);
+                }
+                {
+                    RValue t44 = RValue_makeString("Save Data Corrupted");
+                    RValue t46[1] = { t44 };
+                    RValue t45 = aot_call(ctx, F[11], t46, 1);
+                    RValue_free(&t45);
+                }
+                {
+                    if (aot_cmp(RValue_makeInt32(-1), RValue_makeInt32(-1), CMP_EQ)) {
+                        {
+                            RValue t47 = aot_self(self, &V[0]);
+                            RValue t48 = RValue_makeString("d");
+                            RValue t49 = aot_add(ctx, t47, t48);
+                            RValue t50 = t49;
+                            RValue t52[1] = { t50 };
+                            RValue t51 = aot_call(ctx, F[12], t52, 1);
+                            RValue_free(&t51);
+                        }
+                    }
+                }
+                {
+                    RValue t54[1] = { aot_self(self, &V[0]) };
+                    RValue t53 = aot_call(ctx, F[12], t54, 1);
+                    RValue_free(&t53);
+                }
+                {
+                    RValue t56[1] = { RValue_makeInt32(1) };
+                    RValue t55 = aot_call(ctx, F[13], t56, 1);
+                    RValue_free(&t55);
+                }
+            }
+        } else {
+            {
+                {
+                    RValue t58[1] = { aot_self(self, &V[1]) };
+                    RValue t57 = aot_call(ctx, F[14], t58, 1);
+                    RValue_free(&t57);
+                }
+                {
+                    RValue t60[1] = { aot_self(self, &V[1]) };
+                    RValue t59 = aot_call(ctx, F[9], t60, 1);
+                    RValue_free(&t59);
+                }
+                {
+                    RValue t62[1] = { aot_self(self, &V[1]) };
+                    RValue t61 = aot_call(ctx, F[15], t62, 1);
+                    RValue_free(&t61);
+                }
+                {
+                    RValue t64[1] = { aot_self(self, &V[1]) };
+                    RValue t63 = aot_call(ctx, F[9], t64, 1);
+                    RValue_free(&t63);
+                }
+                {
+                    RValue t66[1] = { aot_self(self, &V[1]) };
+                    RValue t65 = aot_call(ctx, F[16], t66, 1);
+                    RValue_free(&t65);
+                }
+                {
+                    RValue t68[1] = { aot_self(self, &V[1]) };
+                    RValue t67 = aot_call(ctx, F[9], t68, 1);
+                    RValue_free(&t67);
+                }
+                {
+                    RValue t70[1] = { aot_self(self, &V[1]) };
+                    RValue t69 = aot_call(ctx, F[17], t70, 1);
+                    RValue_free(&t69);
+                }
+                {
+                    RValue t72[1] = { aot_self(self, &V[1]) };
+                    RValue t71 = aot_call(ctx, F[9], t72, 1);
+                    RValue_free(&t71);
+                }
+                {
+                    RValue t74[1] = { aot_self(self, &V[1]) };
+                    RValue t73 = aot_call(ctx, F[18], t74, 1);
+                    RValue_free(&t73);
+                }
+                {
+                    RValue t76[1] = { aot_self(self, &V[1]) };
+                    RValue t75 = aot_call(ctx, F[9], t76, 1);
+                    RValue_free(&t75);
+                }
+                {
+                    RValue t78[1] = { aot_self(self, &V[1]) };
+                    RValue t77 = aot_call(ctx, F[19], t78, 1);
+                    RValue_free(&t77);
+                }
+                {
+                    RValue t80[1] = { aot_self(self, &V[1]) };
+                    RValue t79 = aot_call(ctx, F[9], t80, 1);
+                    RValue_free(&t79);
+                }
+                {
+                    RValue t82[1] = { aot_self(self, &V[1]) };
+                    RValue t81 = aot_call(ctx, F[20], t82, 1);
+                    RValue_free(&t81);
+                }
+                {
+                    RValue t84[1] = { aot_self(self, &V[1]) };
+                    RValue t83 = aot_call(ctx, F[9], t84, 1);
+                    RValue_free(&t83);
+                }
+                {
+                    RValue t86[1] = { aot_self(self, &V[1]) };
+                    RValue t85 = aot_call(ctx, F[21], t86, 1);
+                    RValue_free(&t85);
+                }
+                {
+                    RValue t88[1] = { aot_self(self, &V[1]) };
+                    RValue t87 = aot_call(ctx, F[9], t88, 1);
+                    RValue_free(&t87);
+                }
+                {
+                    RValue t90[1] = { aot_self(self, &V[1]) };
+                    RValue t89 = aot_call(ctx, F[22], t90, 1);
+                    RValue_free(&t89);
+                }
+                {
+                    RValue t92[1] = { aot_self(self, &V[1]) };
+                    RValue t91 = aot_call(ctx, F[9], t92, 1);
+                    RValue_free(&t91);
+                }
+                {
+                    RValue t94[1] = { aot_self(self, &V[1]) };
+                    RValue t93 = aot_call(ctx, F[23], t94, 1);
+                    RValue_free(&t93);
+                }
+                {
+                    RValue t96[1] = { aot_self(self, &V[1]) };
+                    RValue t95 = aot_call(ctx, F[9], t96, 1);
+                    RValue_free(&t95);
+                }
+                {
+                    RValue t98[1] = { aot_self(self, &V[1]) };
+                    RValue t97 = aot_call(ctx, F[24], t98, 1);
+                    RValue_free(&t97);
+                }
+                {
+                    RValue t100[1] = { aot_self(self, &V[1]) };
+                    RValue t99 = aot_call(ctx, F[9], t100, 1);
+                    RValue_free(&t99);
+                }
+                {
+                    RValue t102[1] = { aot_self(self, &V[1]) };
+                    RValue t101 = aot_call(ctx, F[10], t102, 1);
+                    RValue_free(&t101);
+                }
+                {
+                    if (aot_cmp(RValue_makeInt32(-1), RValue_makeInt32(-1), CMP_EQ)) {
+                        {
+                            RValue t103 = aot_self(self, &V[0]);
+                            RValue t104 = RValue_makeString("d");
+                            RValue t105 = aot_add(ctx, t103, t104);
+                            RValue t106 = t105;
+                            RValue t108[1] = { t106 };
+                            RValue t107 = aot_call(ctx, F[12], t108, 1);
+                            RValue_free(&t107);
+                        }
+                    }
+                }
+                {
+                    RValue t109 = RValue_makeInt32(99);
+                    RValue t110 = aot_mul(ctx, aot_global(&V[3]), RValue_makeInt32(100));
+                    RValue t111 = t110;
+                    RValue t112 = RValue_makeInt32(427);
+                    RValue t113 = aot_tget(ctx, t112, &V[4], -1);
+                    RValue t114 = t113;
+                    RValue t115 = aot_mul(ctx, t111, t114);
+                    RValue_free(&t111);
+                    RValue_free(&t114);
+                    RValue t116 = t115;
+                    RValue t117 = aot_add(ctx, t109, t116);
+                    RValue_free(&t116);
+                    RValue t118 = t117;
+                    aot_setGlobal(&V[2], t118);
+                    RValue_free(&t118);
+                }
+                {
+                    aot_setVV(globalScope(), &V[5], globalScope(), &V[2]);
+                }
+                {
+                    if (aot_cmpVN(globalScope(), &V[6], 2.0, CMP_LT)) {
+                        {
+                            {
+                                RValue t119 = RValue_makeInt32(427);
+                                RValue t120 = aot_tget(ctx, t119, &V[8], -1);
+                                RValue t121 = t120;
+                                RValue t122 = aot_mul(ctx, aot_global(&V[9]), RValue_makeInt32(5));
+                                RValue t123 = t122;
+                                RValue t124 = aot_add(ctx, t121, t123);
+                                RValue_free(&t121);
+                                RValue_free(&t123);
+                                RValue t125 = t124;
+                                aot_setGlobal(&V[7], t125);
+                                RValue_free(&t125);
+                            }
+                            {
+                                RValue t126 = aot_mul(ctx, aot_global(&V[11]), RValue_makeInt32(2));
+                                RValue t127 = t126;
+                                aot_setGlobal(&V[10], t127);
+                                RValue_free(&t127);
+                            }
+                            {
+                                RValue t128 = aot_mul(ctx, aot_global(&V[13]), RValue_makeInt32(2));
+                                RValue t129 = t128;
+                                aot_setGlobal(&V[12], t129);
+                                RValue_free(&t129);
+                            }
+                        }
+                    } else {
+                        {
+                            {
+                                RValue t130 = RValue_makeInt32(427);
+                                RValue t131 = aot_tget(ctx, t130, &V[8], -1);
+                                RValue t132 = t131;
+                                RValue t133 = aot_mul(ctx, aot_global(&V[9]), RValue_makeInt32(2));
+                                RValue t134 = t133;
+                                RValue t135 = aot_add(ctx, t132, t134);
+                                RValue_free(&t132);
+                                RValue_free(&t134);
+                                RValue t136 = t135;
+                                aot_setGlobal(&V[7], t136);
+                                RValue_free(&t136);
+                            }
+                            {
+                                aot_setVV(globalScope(), &V[10], globalScope(), &V[11]);
+                            }
+                            {
+                                aot_setVV(globalScope(), &V[12], globalScope(), &V[13]);
+                            }
+                        }
+                    }
+                }
+                {
+                    aot_setVV(globalScope(), &V[14], globalScope(), &V[7]);
+                }
+                {
+                    aot_setVV(globalScope(), &V[15], globalScope(), &V[10]);
+                }
+                {
+                    aot_setVV(globalScope(), &V[16], globalScope(), &V[12]);
+                }
+                {
+                    RValue t137 = aot_call(ctx, F[25], NULL, 0);
+                    RValue_free(&t137);
+                }
+                {
+                    aot_setVN(globalScope(), &V[17], 0.0);
+                }
+                {
+                    aot_setVN(globalScope(), &V[18], 0.0);
+                }
+                {
+                    aot_setVN(globalScope(), &V[19], 0.0);
+                }
+                {
+                    aot_setVN(globalScope(), &V[20], 1.0);
+                }
+                {
+                    aot_setVN(globalScope(), &V[21], 0.0);
+                }
+                {
+                    RValue t139[2] = { aot_global(&V[22]), RValue_makeInt32(1) };
+                    RValue t138 = aot_call(ctx, F[26], t139, 2);
+                    RValue_free(&t138);
+                }
+            }
+        }
+    }
+    goto done;
+done:
+    RValue_free(&L_header);
+    return ret;
+}
+
+// ===[ rc4 ]===
+static Var aot_rc4_V[1] = {
+    { NULL, -1, false },
+};
+static AotBuiltin aot_rc4_B[1] = {
+    { NULL, -1 },
+};
+static const char* aot_rc4_Fnames[4] = {
+    "string_length",
+    "string_char_at",
+    "ord",
+    "chr",
+};
+static int32_t aot_rc4_F[4];
+
+static RValue aot_rc4(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    Var* V = aot_rc4_V;
+    AotBuiltin* B = aot_rc4_B;
+    int32_t* F = aot_rc4_F;
+    (void) V; (void) B; (void) F;
+    RValue ret = RValue_makeReal(0.0); // a script that ends without return gives 0
+    RValue L_str = RValue_makeUndefined();
+    RValue L_key = RValue_makeUndefined();
+    RValue L_out = RValue_makeUndefined();
+    RValue L_len = RValue_makeUndefined();
+    RValue L_i = RValue_makeUndefined();
+    RValue L_S = RValue_makeUndefined();
+    RValue L_j = RValue_makeUndefined();
+    RValue L_temp = RValue_makeUndefined();
+    RValue L_pos = RValue_makeUndefined();
+    RValue L_t = RValue_makeUndefined();
+    {
+        RValue t1 = aot_arg(args, argCount, 0);
+        aot_setLocal(&L_str, t1);
+    }
+    {
+        RValue t2 = aot_arg(args, argCount, 1);
+        aot_setLocal(&L_key, t2);
+    }
+    {
+        RValue t3 = RValue_makeString("");
+        aot_setLocal(&L_out, t3);
+    }
+    {
+        RValue t5[1] = { aot_weak(L_key) };
+        RValue t4 = aot_call(ctx, F[0], t5, 1);
+        RValue t6 = t4;
+        aot_setLocal(&L_len, t6);
+        RValue_free(&t6);
+    }
+    {
+        RValue t7 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_i, t7);
+    }
+    for (;;) {
+        if (!aot_cmp(aot_weak(L_i), RValue_makeInt32(256), CMP_LT)) break;
+        {
+            {
+                RValue t8 = aot_weak(L_i);
+                RValue t9 = aot_weak(L_i);
+                VM_aotArraySet(ctx, &L_S, aot_index(t9), t8);
+            }
+        }
+        L1:;
+        {
+            RValue t10 = aot_weak(L_i);
+            RValue t11 = t10;
+            RValue t12 = RValue_makeInt32(1);
+            RValue t13 = aot_add(ctx, t11, t12);
+            aot_setLocal(&L_i, t13);
+            RValue_free(&t13);
+        }
+    }
+    {
+        RValue t14 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_j, t14);
+    }
+    {
+        RValue t15 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_i, t15);
+    }
+    for (;;) {
+        if (!aot_cmp(aot_weak(L_i), RValue_makeInt32(256), CMP_LT)) break;
+        {
+            {
+                RValue t16 = aot_weak(L_j);
+                RValue t17 = aot_weak(L_i);
+                RValue t18 = GMLArray_getOnArrayRef(&L_S, aot_index(t17));
+                RValue t19 = t18;
+                RValue t20 = aot_add(ctx, t16, t19);
+                RValue t21 = t20;
+                RValue t22 = aot_mod(ctx, aot_weak(L_i), aot_weak(L_len));
+                RValue t23 = t22;
+                RValue t24 = RValue_makeInt32(1);
+                RValue t25 = aot_add(ctx, t23, t24);
+                RValue_free(&t23);
+                RValue t26 = t25;
+                RValue t28[2] = { aot_weak(L_key), t26 };
+                RValue t27 = aot_call(ctx, F[1], t28, 2);
+                RValue t29 = t27;
+                RValue t31[1] = { t29 };
+                RValue t30 = aot_call(ctx, F[2], t31, 1);
+                RValue t32 = t30;
+                RValue t33 = aot_add(ctx, t21, t32);
+                RValue_free(&t21);
+                RValue_free(&t32);
+                RValue t34 = t33;
+                RValue t35 = RValue_makeInt32(256);
+                RValue t36 = aot_mod(ctx, t34, t35);
+                RValue_free(&t34);
+                RValue t37 = t36;
+                aot_setLocal(&L_j, t37);
+                RValue_free(&t37);
+            }
+            {
+                RValue t38 = aot_weak(L_i);
+                RValue t39 = GMLArray_getOnArrayRef(&L_S, aot_index(t38));
+                RValue t40 = t39;
+                aot_setLocal(&L_temp, t40);
+            }
+            {
+                RValue t41 = aot_weak(L_j);
+                RValue t42 = GMLArray_getOnArrayRef(&L_S, aot_index(t41));
+                RValue t43 = t42;
+                RValue t44 = aot_weak(L_i);
+                VM_aotArraySet(ctx, &L_S, aot_index(t44), t43);
+            }
+            {
+                RValue t45 = aot_weak(L_temp);
+                RValue t46 = aot_weak(L_j);
+                VM_aotArraySet(ctx, &L_S, aot_index(t46), t45);
+            }
+        }
+        L2:;
+        {
+            RValue t47 = aot_weak(L_i);
+            RValue t48 = t47;
+            RValue t49 = RValue_makeInt32(1);
+            RValue t50 = aot_add(ctx, t48, t49);
+            aot_setLocal(&L_i, t50);
+            RValue_free(&t50);
+        }
+    }
+    {
+        RValue t51 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_i, t51);
+    }
+    {
+        RValue t52 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_j, t52);
+    }
+    {
+        RValue t53 = aot_intToReal(RValue_makeInt32(0));
+        aot_setLocal(&L_pos, t53);
+    }
+    for (;;) {
+        RValue t54 = aot_weak(L_pos);
+        RValue t56[1] = { aot_weak(L_str) };
+        RValue t55 = aot_call(ctx, F[0], t56, 1);
+        RValue t57 = t55;
+        bool t58 = aot_cmp(t54, t57, CMP_LT);
+        RValue_free(&t57);
+        if (!t58) break;
+        {
+            {
+                RValue t59 = aot_add(ctx, aot_weak(L_i), RValue_makeInt32(1));
+                RValue t60 = t59;
+                RValue t61 = RValue_makeInt32(256);
+                RValue t62 = aot_mod(ctx, t60, t61);
+                RValue_free(&t60);
+                RValue t63 = t62;
+                aot_setLocal(&L_i, t63);
+                RValue_free(&t63);
+            }
+            {
+                RValue t64 = aot_weak(L_j);
+                RValue t65 = aot_weak(L_i);
+                RValue t66 = GMLArray_getOnArrayRef(&L_S, aot_index(t65));
+                RValue t67 = t66;
+                RValue t68 = aot_add(ctx, t64, t67);
+                RValue t69 = t68;
+                RValue t70 = RValue_makeInt32(256);
+                RValue t71 = aot_mod(ctx, t69, t70);
+                RValue_free(&t69);
+                RValue t72 = t71;
+                aot_setLocal(&L_j, t72);
+                RValue_free(&t72);
+            }
+            {
+                RValue t73 = aot_weak(L_i);
+                RValue t74 = GMLArray_getOnArrayRef(&L_S, aot_index(t73));
+                RValue t75 = t74;
+                aot_setLocal(&L_temp, t75);
+            }
+            {
+                RValue t76 = aot_weak(L_j);
+                RValue t77 = GMLArray_getOnArrayRef(&L_S, aot_index(t76));
+                RValue t78 = t77;
+                RValue t79 = aot_weak(L_i);
+                VM_aotArraySet(ctx, &L_S, aot_index(t79), t78);
+            }
+            {
+                RValue t80 = aot_weak(L_temp);
+                RValue t81 = aot_weak(L_j);
+                VM_aotArraySet(ctx, &L_S, aot_index(t81), t80);
+            }
+            {
+                RValue t82 = aot_weak(L_i);
+                RValue t83 = GMLArray_getOnArrayRef(&L_S, aot_index(t82));
+                RValue t84 = t83;
+                RValue t85 = aot_weak(L_j);
+                RValue t86 = GMLArray_getOnArrayRef(&L_S, aot_index(t85));
+                RValue t87 = t86;
+                RValue t88 = aot_add(ctx, t84, t87);
+                RValue t89 = t88;
+                RValue t90 = RValue_makeInt32(256);
+                RValue t91 = aot_mod(ctx, t89, t90);
+                RValue_free(&t89);
+                RValue t92 = t91;
+                aot_setLocal(&L_t, t92);
+                RValue_free(&t92);
+            }
+            {
+                RValue t93 = aot_weak(L_out);
+                RValue t94 = t93;
+                RValue t95 = aot_add(ctx, aot_weak(L_pos), RValue_makeInt32(1));
+                RValue t96 = t95;
+                RValue t98[2] = { aot_weak(L_str), t96 };
+                RValue t97 = aot_call(ctx, F[1], t98, 2);
+                RValue t99 = t97;
+                RValue t101[1] = { t99 };
+                RValue t100 = aot_call(ctx, F[2], t101, 1);
+                RValue t102 = t100;
+                RValue t103 = aot_weak(L_t);
+                RValue t104 = GMLArray_getOnArrayRef(&L_S, aot_index(t103));
+                RValue t105 = t104;
+                RValue t106 = aot_bxor(ctx, t102, t105);
+                RValue_free(&t102);
+                RValue t107 = t106;
+                RValue t109[1] = { t107 };
+                RValue t108 = aot_call(ctx, F[3], t109, 1);
+                RValue t110 = t108;
+                RValue t111 = aot_add(ctx, t94, t110);
+                RValue_free(&t110);
+                aot_setLocal(&L_out, t111);
+                RValue_free(&t111);
+            }
+        }
+        L3:;
+        {
+            RValue t112 = aot_weak(L_pos);
+            RValue t113 = t112;
+            RValue t114 = RValue_makeInt32(1);
+            RValue t115 = aot_add(ctx, t113, t114);
+            aot_setLocal(&L_pos, t115);
+            RValue_free(&t115);
+        }
+    }
+    {
+        RValue t116 = aot_weak(L_out);
+        RValue_free(&ret); ret = RValue_makeIndependent(t116);
+    }
+    goto done;
+    goto done;
+done:
+    RValue_free(&L_str);
+    RValue_free(&L_key);
+    RValue_free(&L_out);
+    RValue_free(&L_len);
+    RValue_free(&L_i);
+    RValue_free(&L_S);
+    RValue_free(&L_j);
+    RValue_free(&L_temp);
+    RValue_free(&L_pos);
+    RValue_free(&L_t);
+    return ret;
+}
+
+// ===[ sv6_get_main ]===
+static Var aot_sv6_get_main_V[16] = {
+    { "list", -1, false },
+    { "i", -1, false },
+    { "save_room", -1, true },
+    { "difficulty", -1, true },
+    { "gametime", -1, true },
+    { "itemstaken", -1, true },
+    { "etanks", -1, true },
+    { "mtanks", -1, true },
+    { "stanks", -1, true },
+    { "ptanks", -1, true },
+    { "monstersleft", -1, true },
+    { "monstersarea", -1, true },
+    { "lavastate", -1, true },
+    { "mapmarker", -1, true },
+    { "mapmarkerx", -1, true },
+    { "mapmarkery", -1, true },
+};
+static AotBuiltin aot_sv6_get_main_B[1] = {
+    { NULL, -1 },
+};
+static const char* aot_sv6_get_main_Fnames[6] = {
+    "ds_list_create",
+    "file_text_read_string",
+    "base64_decode",
+    "ds_list_read",
+    "readline",
+    "ds_list_clear",
+};
+static int32_t aot_sv6_get_main_F[6];
+
+static RValue aot_sv6_get_main(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    Var* V = aot_sv6_get_main_V;
+    AotBuiltin* B = aot_sv6_get_main_B;
+    int32_t* F = aot_sv6_get_main_F;
+    (void) V; (void) B; (void) F;
+    RValue ret = RValue_makeReal(0.0); // a script that ends without return gives 0
+    {
+        RValue t1 = aot_call(ctx, F[0], NULL, 0);
+        RValue t2 = t1;
+        aot_setSelf(self, &V[0], t2);
+        RValue_free(&t2);
+    }
+    {
+        RValue t4[1] = { aot_arg(args, argCount, 0) };
+        RValue t3 = aot_call(ctx, F[1], t4, 1);
+        RValue t5 = t3;
+        RValue t7[1] = { t5 };
+        RValue t6 = aot_call(ctx, F[2], t7, 1);
+        RValue t8 = t6;
+        RValue t10[2] = { aot_self(self, &V[0]), t8 };
+        RValue t9 = aot_call(ctx, F[3], t10, 2);
+        RValue_free(&t9);
+    }
+    {
+        aot_setVN(self, &V[1], 0.0);
+    }
+    {
+        RValue t11 = aot_call(ctx, F[4], NULL, 0);
+        RValue t12 = t11;
+        aot_setGlobal(&V[2], t12);
+        RValue_free(&t12);
+    }
+    {
+        RValue t13 = aot_call(ctx, F[4], NULL, 0);
+        RValue t14 = t13;
+        aot_setGlobal(&V[3], t14);
+        RValue_free(&t14);
+    }
+    {
+        RValue t15 = aot_call(ctx, F[4], NULL, 0);
+        RValue t16 = t15;
+        aot_setGlobal(&V[4], t16);
+        RValue_free(&t16);
+    }
+    {
+        RValue t17 = aot_call(ctx, F[4], NULL, 0);
+        RValue t18 = t17;
+        aot_setGlobal(&V[5], t18);
+        RValue_free(&t18);
+    }
+    {
+        RValue t19 = aot_call(ctx, F[4], NULL, 0);
+        RValue t20 = t19;
+        aot_setGlobal(&V[6], t20);
+        RValue_free(&t20);
+    }
+    {
+        RValue t21 = aot_call(ctx, F[4], NULL, 0);
+        RValue t22 = t21;
+        aot_setGlobal(&V[7], t22);
+        RValue_free(&t22);
+    }
+    {
+        RValue t23 = aot_call(ctx, F[4], NULL, 0);
+        RValue t24 = t23;
+        aot_setGlobal(&V[8], t24);
+        RValue_free(&t24);
+    }
+    {
+        RValue t25 = aot_call(ctx, F[4], NULL, 0);
+        RValue t26 = t25;
+        aot_setGlobal(&V[9], t26);
+        RValue_free(&t26);
+    }
+    {
+        RValue t27 = aot_call(ctx, F[4], NULL, 0);
+        RValue t28 = t27;
+        aot_setGlobal(&V[10], t28);
+        RValue_free(&t28);
+    }
+    {
+        RValue t29 = aot_call(ctx, F[4], NULL, 0);
+        RValue t30 = t29;
+        aot_setGlobal(&V[11], t30);
+        RValue_free(&t30);
+    }
+    {
+        RValue t31 = aot_call(ctx, F[4], NULL, 0);
+        RValue t32 = t31;
+        aot_setGlobal(&V[12], t32);
+        RValue_free(&t32);
+    }
+    {
+        RValue t33 = aot_call(ctx, F[4], NULL, 0);
+        RValue t34 = t33;
+        aot_setGlobal(&V[13], t34);
+        RValue_free(&t34);
+    }
+    {
+        RValue t35 = aot_call(ctx, F[4], NULL, 0);
+        RValue t36 = t35;
+        aot_setGlobal(&V[14], t36);
+        RValue_free(&t36);
+    }
+    {
+        RValue t37 = aot_call(ctx, F[4], NULL, 0);
+        RValue t38 = t37;
+        aot_setGlobal(&V[15], t38);
+        RValue_free(&t38);
+    }
+    {
+        RValue t40[1] = { aot_self(self, &V[0]) };
+        RValue t39 = aot_call(ctx, F[5], t40, 1);
+        RValue_free(&t39);
+    }
+    goto done;
+done:
+    return ret;
+}
+
+// ===[ init_map ]===
+static Var aot_init_map_V[1] = {
+    { NULL, -1, false },
+};
+static AotBuiltin aot_init_map_B[1] = {
+    { NULL, -1 },
+};
+static const char* aot_init_map_Fnames[17] = {
+    "map_init_01",
+    "map_init_02",
+    "map_init_03",
+    "map_init_04",
+    "map_init_05",
+    "map_init_06",
+    "map_init_07",
+    "map_init_08",
+    "map_init_09",
+    "map_init_10",
+    "map_init_11",
+    "map_init_12",
+    "map_init_13",
+    "map_init_14",
+    "map_init_15",
+    "map_init_16",
+    "map_init_17",
+};
+static int32_t aot_init_map_F[17];
+
+static RValue aot_init_map(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    Var* V = aot_init_map_V;
+    AotBuiltin* B = aot_init_map_B;
+    int32_t* F = aot_init_map_F;
+    (void) V; (void) B; (void) F;
+    RValue ret = RValue_makeReal(0.0); // a script that ends without return gives 0
+    {
+        RValue t1 = aot_call(ctx, F[0], NULL, 0);
+        RValue_free(&t1);
+    }
+    {
+        RValue t2 = aot_call(ctx, F[1], NULL, 0);
+        RValue_free(&t2);
+    }
+    {
+        RValue t3 = aot_call(ctx, F[2], NULL, 0);
+        RValue_free(&t3);
+    }
+    {
+        RValue t4 = aot_call(ctx, F[3], NULL, 0);
+        RValue_free(&t4);
+    }
+    {
+        RValue t5 = aot_call(ctx, F[4], NULL, 0);
+        RValue_free(&t5);
+    }
+    {
+        RValue t6 = aot_call(ctx, F[5], NULL, 0);
+        RValue_free(&t6);
+    }
+    {
+        RValue t7 = aot_call(ctx, F[6], NULL, 0);
+        RValue_free(&t7);
+    }
+    {
+        RValue t8 = aot_call(ctx, F[7], NULL, 0);
+        RValue_free(&t8);
+    }
+    {
+        RValue t9 = aot_call(ctx, F[8], NULL, 0);
+        RValue_free(&t9);
+    }
+    {
+        RValue t10 = aot_call(ctx, F[9], NULL, 0);
+        RValue_free(&t10);
+    }
+    {
+        RValue t11 = aot_call(ctx, F[10], NULL, 0);
+        RValue_free(&t11);
+    }
+    {
+        RValue t12 = aot_call(ctx, F[11], NULL, 0);
+        RValue_free(&t12);
+    }
+    {
+        RValue t13 = aot_call(ctx, F[12], NULL, 0);
+        RValue_free(&t13);
+    }
+    {
+        RValue t14 = aot_call(ctx, F[13], NULL, 0);
+        RValue_free(&t14);
+    }
+    {
+        RValue t15 = aot_call(ctx, F[14], NULL, 0);
+        RValue_free(&t15);
+    }
+    {
+        RValue t16 = aot_call(ctx, F[15], NULL, 0);
+        RValue_free(&t16);
+    }
+    {
+        RValue t17 = aot_call(ctx, F[16], NULL, 0);
+        RValue_free(&t17);
+    }
+    goto done;
+done:
+    return ret;
+}
+
 static AotScript gAotScripts[] = {
     { "characterStepEvent", aot_characterStepEvent, NULL, aot_characterStepEvent_V, 217, aot_characterStepEvent_B, 18, aot_characterStepEvent_Fnames, aot_characterStepEvent_F, 60 },
     { "chStepSetSprite", aot_chStepSetSprite, NULL, aot_chStepSetSprite_V, 83, aot_chStepSetSprite_B, 14, aot_chStepSetSprite_Fnames, aot_chStepSetSprite_F, 14 },
@@ -81670,4 +83479,13 @@ static AotScript gAotScripts[] = {
     { "gml_Object_oErisPipe_Draw_0", aot_oErisPipe_Draw_0, aot_oErisPipe_Draw_0_event, aot_oErisPipe_Draw_0_V, 2, aot_oErisPipe_Draw_0_B, 3, aot_oErisPipe_Draw_0_Fnames, aot_oErisPipe_Draw_0_F, 1 },
     { "gml_Object_oA8RedLight_Draw_0", aot_oA8RedLight_Draw_0, aot_oA8RedLight_Draw_0_event, aot_oA8RedLight_Draw_0_V, 0, aot_oA8RedLight_Draw_0_B, 4, aot_oA8RedLight_Draw_0_Fnames, aot_oA8RedLight_Draw_0_F, 2 },
     { "gml_Object_oTPO_Step_0", aot_oTPO_Step_0, aot_oTPO_Step_0_event, aot_oTPO_Step_0_V, 10, aot_oTPO_Step_0_B, 3, aot_oTPO_Step_0_Fnames, aot_oTPO_Step_0_F, 8 },
+    { "crypt", aot_crypt, NULL, aot_crypt_V, 0, aot_crypt_B, 1, aot_crypt_Fnames, aot_crypt_F, 17 },
+    { "reset_map", aot_reset_map, NULL, aot_reset_map_V, 4, aot_reset_map_B, 0, aot_reset_map_Fnames, aot_reset_map_F, 2 },
+    { "sv6_get_map", aot_sv6_get_map, NULL, aot_sv6_get_map_V, 5, aot_sv6_get_map_B, 0, aot_sv6_get_map_Fnames, aot_sv6_get_map_F, 6 },
+    { "readline", aot_readline, NULL, aot_readline_V, 2, aot_readline_B, 0, aot_readline_Fnames, aot_readline_F, 1 },
+    { "sv6_load_details", aot_sv6_load_details, NULL, aot_sv6_load_details_V, 2, aot_sv6_load_details_B, 0, aot_sv6_load_details_Fnames, aot_sv6_load_details_F, 12 },
+    { "sv6_load", aot_sv6_load, NULL, aot_sv6_load_V, 23, aot_sv6_load_B, 0, aot_sv6_load_Fnames, aot_sv6_load_F, 27 },
+    { "rc4", aot_rc4, NULL, aot_rc4_V, 0, aot_rc4_B, 0, aot_rc4_Fnames, aot_rc4_F, 4 },
+    { "sv6_get_main", aot_sv6_get_main, NULL, aot_sv6_get_main_V, 16, aot_sv6_get_main_B, 0, aot_sv6_get_main_Fnames, aot_sv6_get_main_F, 6 },
+    { "init_map", aot_init_map, NULL, aot_init_map_V, 0, aot_init_map_B, 0, aot_init_map_Fnames, aot_init_map_F, 17 },
 };

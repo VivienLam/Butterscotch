@@ -786,6 +786,8 @@ class Gen:
                     self.emit(f'aot_bset(ctx, self, &B[{self.builtin_index(base[1])}], {ix}, {v});')
                 elif c[0] == 'self':
                     self.emit(f'aot_setSelfArr(ctx, self, &V[{self.var_index(base[1], False)}], {ix}, {v});')
+                elif c[0] == 'local':
+                    self.emit(f'VM_aotArraySet(ctx, &L_{base[1]}, {ix}, {v});')
                 else:
                     raise SyntaxError(f'array store to {c}')
             elif base[0] == 'dot':

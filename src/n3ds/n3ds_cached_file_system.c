@@ -27,7 +27,7 @@
 #define N3DS_FS_WRITE_BACK_MAX_DELAY_MS 5000u
 // Files read and left unchanged are kept for later reads up to this size each and this much in total.
 #define N3DS_FS_CLEAN_FILE_MAX_BYTES (1024 * 1024)
-#define N3DS_FS_CLEAN_TOTAL_MAX_BYTES (4 * 1024 * 1024)
+#define N3DS_FS_CLEAN_TOTAL_MAX_BYTES (1024 * 1024) // was 4 MB: the Old 3DS heap runs full
 
 typedef struct {
     char* key;

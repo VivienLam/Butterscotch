@@ -2038,7 +2038,11 @@ static void handleDup(VMContext* ctx, uint32_t instr) {
 
 // ===[ Function Call Handler ]===
 
+void (*VM_periodicHook)(void) = NULL;
+uint32_t VM_periodicHookCounter = 0;
+
 static void handleCall(VMContext* ctx, uint32_t instr, const uint8_t* extraData) {
+    VM_periodicTick();
     int32_t argCount = instr & 0xFFFF;
     uint32_t funcIndex = resolveFuncOperand(extraData);
     require(ctx->dataWin->func.functionCount > funcIndex);
