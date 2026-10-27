@@ -7,6 +7,46 @@
 #include <stdlib.h>
 #include "n3ds/n3ds_gml.h"
 #include "n3ds/n3ds_am2r_native.h"
+
+// Bench: the 3DS atlas's tile -> page table (gfx/atlas.bin from n3ds-preprocess), as the tile batch key.
+typedef struct { int16_t bg; uint16_t sx, sy, sw, sh, page; } BenchTileKey;
+static BenchTileKey* gBenchTiles = NULL;
+static size_t gBenchTileCount = 0;
+static int benchTileCmp(const void* a, const void* b) {
+    const BenchTileKey* x = a; const BenchTileKey* y = b;
+    if (x->bg != y->bg) return x->bg < y->bg ? -1 : 1;
+    if (x->sx != y->sx) return x->sx < y->sx ? -1 : 1;
+    if (x->sy != y->sy) return x->sy < y->sy ? -1 : 1;
+    if (x->sw != y->sw) return x->sw < y->sw ? -1 : 1;
+    if (x->sh != y->sh) return x->sh < y->sh ? -1 : 1;
+    return 0;
+}
+static int32_t benchTileBatchKey(Renderer* renderer, RoomTile* tile) {
+    (void) renderer;
+    BenchTileKey k = { (int16_t) tile->backgroundDefinition, (uint16_t) tile->sourceX, (uint16_t) tile->sourceY, (uint16_t) tile->width, (uint16_t) tile->height, 0 };
+    BenchTileKey* f = bsearch(&k, gBenchTiles, gBenchTileCount, sizeof(k), benchTileCmp);
+    return f != NULL ? f->page : -1;
+}
+static void benchLoadTileAtlas(const char* path, Renderer* renderer) {
+    FILE* f = fopen(path, "rb");
+    if (f == NULL) return;
+    fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+    uint8_t* a = malloc((size_t) n); if (fread(a, 1, (size_t) n, f) != (size_t) n) { fclose(f); free(a); return; } fclose(f);
+    uint16_t pc; uint32_t ic, fc, tc;
+    memcpy(&pc, a + 6, 2); memcpy(&ic, a + 8, 4); memcpy(&fc, a + 12, 4); memcpy(&tc, a + 16, 4);
+    size_t q = 24 + (size_t) pc * 16 + (size_t) ic * 10;
+    const uint8_t* frags = a + q; q += (size_t) fc * 14;
+    gBenchTiles = malloc(tc * sizeof(BenchTileKey)); gBenchTileCount = tc;
+    for (uint32_t i = 0; i < tc; i++, q += 26) {
+        uint16_t v[10]; memcpy(v, a + q, 20); uint32_t fs; uint16_t fcn; memcpy(&fs, a + q + 20, 4); memcpy(&fcn, a + q + 24, 2);
+        uint16_t page = v[5]; if (fcn > 0) memcpy(&page, frags + (size_t) fs * 14, 2);
+        gBenchTiles[i] = (BenchTileKey) { (int16_t) v[0], v[1], v[2], v[3], v[4], page };
+    }
+    free(a);
+    qsort(gBenchTiles, gBenchTileCount, sizeof(BenchTileKey), benchTileCmp);
+    renderer->vtable->tileBatchKey = benchTileBatchKey;
+    fprintf(stderr, "Bench: %u tile atlas entries\n", (unsigned) tc);
+}
 #endif
 
 #include "platformdefs.h"
@@ -983,6 +1023,7 @@ int loop(CommandLineArgs args, const char *argv0) {
 #ifdef BS_AM2R_NATIVES_HOST
         // Desktop test bench for the 3DS port's AM2R natives (src/n3ds/n3ds_am2r_native.c): BS_NATIVES=1 runs them
         // here, so a run with and without them can be compared state for state.
+        if (getenv("BS_TILEBATCH_ATLAS") != NULL) benchLoadTileAtlas(getenv("BS_TILEBATCH_ATLAS"), renderer);
         if (getenv("BS_NATIVES") != NULL) {
             N3DSGml_init(runner);
             N3DSAm2rNative_setEnabled(true);
@@ -1256,7 +1297,28 @@ int loop(CommandLineArgs args, const char *argv0) {
 
             // Run one game step (Begin Step, Keyboard, Alarms, Step, End Step, room transitions)
             if (shouldStep) {
+#ifdef BS_AM2R_NATIVES_HOST
+                // BS_HUDSKIP=1: every other step is a frameskip's hidden one (its HUD isn't redrawn).
+                static int hudSkip = -1;
+                if (hudSkip < 0) hudSkip = getenv("BS_HUDSKIP") != NULL;
+                if (hudSkip) N3DSAm2rNative_setHiddenStep(runner->frameCount % 2 == 1);
+                // BS_FAKEPAD=1: a connected gamepad 0 with buttons and stick moving on a fixed pattern.
+                static int fakePad = -1;
+                if (fakePad < 0) fakePad = getenv("BS_FAKEPAD") != NULL;
+                if (fakePad) {
+                    GamepadSlot* slot = &runner->gamepads->slots[0];
+                    uint32_t f = (uint32_t) runner->frameCount;
+                    slot->connected = true;
+                    runner->gamepads->connectedCount = 1;
+                    for (int b = 0; b < 16; b++) slot->buttonDown[b] = ((f / (7u + (uint32_t) b * 3u)) % 5u) == 0;
+                    slot->axisValue[0] = (float) sin((double) f * 0.031) * 0.95f;
+                    slot->axisValue[1] = (float) cos((double) f * 0.017) * 0.6f;
+                }
+#endif
                 Runner_step(runner);
+#ifdef BS_AM2R_NATIVES_HOST
+                N3DSAm2rNative_setHiddenStep(false);
+#endif
             }
 
             if (freeCamActive) {

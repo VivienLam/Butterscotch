@@ -54,6 +54,7 @@ static RValue callScript(int32_t code, RValue* args, int32_t argCount) {
 }
 
 static void drawText(GMLReal x, GMLReal y, RValue text) {
+    if (gNoDraw) return;
     RValue a[3] = { R(x), R(y), text };
     a[2].ownsReference = false;
     callVoid(N.drawText, a, 3);
@@ -61,6 +62,7 @@ static void drawText(GMLReal x, GMLReal y, RValue text) {
 
 // draw_text(x, y, string(<value>))
 static void drawTextOf(GMLReal x, GMLReal y, RValue value) {
+    if (gNoDraw) return;
     RValue arg = value;
     arg.ownsReference = false;
     RValue s = N.string(N.vm, &arg, 1);
@@ -69,6 +71,7 @@ static void drawTextOf(GMLReal x, GMLReal y, RValue value) {
 }
 
 static void drawBackgroundAt(GMLReal bg, GMLReal x, GMLReal y) {
+    if (gNoDraw) return;
     RValue a[3] = { R(bg), R(x), R(y) };
     callVoid(N.drawBackground, a, 3);
 }
@@ -91,6 +94,8 @@ static const struct { int16_t bg, xoff; } kTankFrames[16] = {
 
 static RValue native_draw_gui(VMContext* ctx, RValue* args, int32_t argCount) {
     Instance* self = (Instance*) ctx->currentInstance;
+    bool hidden = gHudSkipping; // oControl's clear was skipped: draw nothing (or clear after all)
+    gHudSkipping = false;
     Instance* control = VM_findInstanceByTarget(ctx, N.objControl);
     Instance* character = VM_findInstanceByTarget(ctx, N.objCharacter);
     HudGlobals g;
@@ -103,6 +108,10 @@ static RValue native_draw_gui(VMContext* ctx, RValue* args, int32_t argCount) {
     RValue* pbombsSlot = varSlot(globalScope(), &v_pbombs);
     bool ok = self != NULL && control != NULL && character != NULL && globalNum(&v_classicmode, &g.classicmode) &&
         globalNum(&v_opshowhud, &g.opshowhud);
+    if (hidden && (self != control || !ok || !(gmlCmp(g.classicmode, 0) == 0 && truthy(g.opshowhud)))) {
+        hudClearNow();
+        hidden = false;
+    }
     if (ok && !(gmlCmp(g.classicmode, 0) == 0 && truthy(g.opshowhud))) return R(0.0); // HUD off: nothing drawn
     // Everything the game's code may read this frame, before drawing anything (a missing one: the game's code).
     ok = ok && globalNum(&v_etanks, &g.etanks) && globalNum(&v_playerhealth, &g.playerhealth) &&
@@ -118,7 +127,11 @@ static RValue native_draw_gui(VMContext* ctx, RValue* args, int32_t argCount) {
     if (ok && gmlCmp(g.maxpbombs, 0) > 0) ok = pbombsSlot != NULL;
     if (ok && gmlCmp(g.ophudshowmetrcount, 1) == 0) ok = globalNum(&v_monstersarea, &g.monstersarea);
     if (ok && gmlCmp(g.ophudshowmetrcount, 2) == 0) ok = globalNum(&v_monstersleft, &g.monstersleft);
-    if (!ok) return callOriginal(gCode_draw_gui, args, argCount);
+    if (!ok) {
+        if (hidden) hudClearNow();
+        return callOriginal(gCode_draw_gui, args, argCount);
+    }
+    gNoDraw = hidden;
 
     // The tank frame (the game checks each pair; 29 also takes 30 and up).
     GMLReal xoff = 33;
@@ -147,7 +160,7 @@ static RValue native_draw_gui(VMContext* ctx, RValue* args, int32_t argCount) {
         RValue flashText = callScript(gCode_gui_health, NULL, 0);
         RValue a[8] = { R(4), R(4), flashText, R(16777215), R(16777215), R(16777215), R(16777215), R(hudflashfx / 4) };
         a[2].ownsReference = false;
-        callVoid(N.drawTextColor, a, 8);
+        if (!gNoDraw) callVoid(N.drawTextColor, a, 8);
         RValue_free(&flashText);
     }
 
@@ -235,11 +248,12 @@ static RValue native_draw_gui(VMContext* ctx, RValue* args, int32_t argCount) {
             RValue_free(&text);
         }
     }
-    if (showMap) {
+    if (showMap && !gNoDraw) {
         RValue mapArgs[2] = { R(276 + ws), R(0) };
         RValue r = native_draw_gui_map(ctx, mapArgs, 2);
         RValue_free(&r);
     }
+    gNoDraw = false;
     return R(0.0);
 }
 

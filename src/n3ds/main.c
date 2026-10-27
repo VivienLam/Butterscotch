@@ -16,6 +16,7 @@
 #include "n3ds_cached_file_system.h"
 #include "n3ds_input.h"
 #include "n3ds_am2r.h"
+#include "n3ds_am2r_native.h"
 #include "n3ds_livemap.h"
 #include "n3ds_pause.h"
 #include "n3ds_platform_config.h"
@@ -851,7 +852,9 @@ int main(int argc, char** argv) {
             if (N3DSInput_takeMonitorToggle()) debugMonitorVisible = !debugMonitorVisible;
             {
                 N3DS_ZONE(N3DS_ZONE_STEP);
+                N3DSAm2rNative_setHiddenStep(true);
                 Runner_step(runner);
+                N3DSAm2rNative_setHiddenStep(false);
                 N3DSAm2r_update();
             }
             runner->audioSystem->vtable->update(runner->audioSystem, dt);
@@ -1053,8 +1056,9 @@ int main(int argc, char** argv) {
 #ifdef N3DS_ENABLE_AUDIO
             effects = N3DSAudio_effectsStarted(runner->audioSystem);
 #endif
-            logInfo("Perf: %.1f fps, step %.2f ms, draw %.2f ms, gpu/vblank wait %.2f ms (avg over %u frames, worst %.0f ms), room %s, heap used %lu KB, linear free %lu KB, sfx %lu\n",
+            logInfo("Perf: %.1f fps, step %.2f ms, draw %.2f ms, gpu/vblank wait %.2f ms (avg over %u frames, worst %.0f ms), %lu texture switches/frame, room %s, heap used %lu KB, linear free %lu KB, sfx %lu\n",
                 (double) statsFrames / seconds, statsStepMs / statsFrames, statsDrawMs / statsFrames, statsWaitMs / statsFrames, (unsigned) statsFrames, statsMaxFrameMs,
+                (unsigned long) (N3DSRenderer_takeTextureSwitches() / statsFrames),
                 runner->currentRoom != NULL ? runner->currentRoom->name : "-",
                 (unsigned long) (mi.uordblks / 1024u), (unsigned long) (linearSpaceFree() / 1024u), (unsigned long) effects);
             statsStartMs = nowMs;

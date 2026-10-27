@@ -286,6 +286,8 @@ typedef struct {
     int32_t depth;
     uint32_t layerOrder;
     int32_t elementOrder;
+    // Tiles: the position among the depth's tiles (the tile index unless the run was reordered for batching).
+    int32_t tileRank;
     union {
         Instance* instance;
         int32_t tileIndex;

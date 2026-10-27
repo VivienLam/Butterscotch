@@ -2253,10 +2253,20 @@ static bool N3DSRenderer_isIdentityTint(uint32_t color, float alpha) {
     return color == 0x00FFFFFFu && alpha >= 0.999f;
 }
 
+// Texture switches since the last N3DSRenderer_takeTextureSwitches (each one is a citro2d draw call).
+static uint32_t gN3DSTextureSwitches = 0;
+
+uint32_t N3DSRenderer_takeTextureSwitches(void) {
+    uint32_t n = gN3DSTextureSwitches;
+    gN3DSTextureSwitches = 0;
+    return n;
+}
+
 static void N3DSRenderer_trackTextureUse(N3DSRenderer* renderer, const C2D_Image* image) {
     if (renderer == NULL || image == NULL || image->tex == NULL) return;
     if (renderer->lastDrawTexture != image->tex) {
         renderer->frameTextureSwitches++;
+        gN3DSTextureSwitches++;
         renderer->lastDrawTexture = image->tex;
     }
 }
@@ -4464,6 +4474,23 @@ static bool N3DSRenderer_visibleRoomRect(Renderer* base, float* left, float* top
     return true;
 }
 
+// The atlas page a tile draws from (its first fragment's), for grouping a depth's tiles by page (see the runner's
+// tile runs): each page switch costs citro2d a draw call.
+static int32_t N3DSRenderer_tileBatchKey(Renderer* base, RoomTile* tile) {
+    if (base == NULL || tile == NULL) return -1;
+    N3DSRenderer* renderer = (N3DSRenderer*) base;
+    N3DSTileAtlasEntry* entry = N3DSRenderer_findTileEntry(renderer, tile);
+    if (entry != NULL) {
+        if (entry->fragmentCount == 0) return (int32_t) entry->atlasId;
+        if (entry->fragmentStart < renderer->atlasFragmentCount) return (int32_t) renderer->atlasFragments[entry->fragmentStart].atlasId;
+        return -1;
+    }
+    int32_t tpagIndex = Renderer_resolveObjectTPAGIndex(base->dataWin, tile);
+    uint32_t page = 0;
+    if (tpagIndex >= 0 && N3DSRenderer_getPageIndexForTPAG(renderer, tpagIndex, &page)) return (int32_t) page;
+    return -1;
+}
+
 static void N3DSRenderer_drawTile(Renderer* base, RoomTile* tile, float offsetX, float offsetY) {
     N3DS_ZONE_COUNT_ONLY(N3DS_ZONE_TILE);
     if (base == NULL || tile == NULL) return;
@@ -6323,6 +6350,7 @@ C3D_RenderTarget* N3DSRenderer_getTopTarget(Renderer* base) {
 
 static RendererVtable N3DSRenderer_vtable = {
     .getVisibleRoomRect = N3DSRenderer_visibleRoomRect,
+    .tileBatchKey = N3DSRenderer_tileBatchKey,
     .init = N3DSRenderer_init,
     .destroy = N3DSRenderer_destroy,
     .beginFrame = N3DSRenderer_beginFrame,

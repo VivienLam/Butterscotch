@@ -53,6 +53,7 @@ void N3DSRenderer_frameEnd(void);
 bool N3DSRenderer_frameIsOpen(void);
 double N3DSRenderer_frameWaitMs(void);
 double N3DSRenderer_frameGpuMs(void);
+uint32_t N3DSRenderer_takeTextureSwitches(void);
 C3D_RenderTarget* N3DSRenderer_getTopTarget(Renderer* renderer);
 C3D_RenderTarget* N3DSRenderer_getBottomTarget(Renderer* renderer);
 // Deletes surfaces freed during earlier frames. Call outside C3D_FrameBegin/End; all = everything (shutdown).

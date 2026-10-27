@@ -189,6 +189,9 @@ typedef struct {
     // Optional: the room-space rectangle the current target shows through the current view (nullptr or false =
     // unknown). The runner then hands over only the tiles near it instead of every tile in the room.
     bool (*getVisibleRoomRect)(Renderer* renderer, float* left, float* top, float* right, float* bottom);
+    // Optional: which texture a tile draws from (-1: unknown). Tiles of one depth that don't overlap may then be drawn
+    // grouped by texture (fewer texture switches); overlapping ones keep their order.
+    int32_t (*tileBatchKey)(Renderer* renderer, RoomTile* tile);
     void (*drawSpriteTiled)(Renderer* renderer, int32_t tpagIndex, float originX, float originY, float x, float y, float xscale, float yscale, bool tileX, bool tileY, float roomW, float roomH, uint32_t color, float alpha);
     // Surface Functions
     int32_t (*createSurface)(Renderer* renderer, int32_t width, int32_t height);

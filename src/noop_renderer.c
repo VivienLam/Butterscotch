@@ -35,6 +35,7 @@ typedef struct {
 
 // Helpers
 static void noopEnsureSurfaceCapacity(NoopRenderer *noop, uint32_t needed) {
+    if (needed > noop->surfaceCount && needed <= noop->surfaceCapacity) noop->surfaceCount = needed;
     if (needed <= noop->surfaceCapacity) return;
     uint32_t newCap = noop->surfaceCapacity ? noop->surfaceCapacity * 2 : 16;
     while (newCap < needed) newCap *= 2;

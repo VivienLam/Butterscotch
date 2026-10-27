@@ -684,7 +684,7 @@ typedef struct {
 static DrawKey drawableKey(const Drawable* d) {
     DrawKey k = { d->depth, d->type, 0, d->layerOrder, d->elementOrder };
     switch (d->type) {
-        case DRAWABLE_TILE: k.order = d->tileIndex; break;
+        case DRAWABLE_TILE: k.order = d->tileRank; break;
         case DRAWABLE_INSTANCE: k.order = (int32_t) d->instance->instanceId;  break;
         case DRAWABLE_LAYER: k.order = d->runtimeLayerId; break;
         case DRAWABLE_PARTICLE_SYSTEM: k.order = d->particleSystemId; break;
@@ -913,6 +913,233 @@ static int32_t tileRunCell(const TileRun* run, float x0, float y0) {
     return cy * run->columns + cx;
 }
 
+// Reorders one depth's tiles (tiles[start..start+count), in draw order) so the ones from the same texture come
+// together: a texture switch costs the 3DS a draw call. A tile only moves past tiles it doesn't overlap, so what
+// ends up on screen is the same. Greedy: draw every ready tile of the current texture, then switch to the texture
+// of the earliest ready tile.
+#define TILE_BATCH_CELL 64.0f
+#define TILE_BATCH_MAX_CELLS 65536
+#define TILE_BATCH_MAX_PER_CELL 512
+
+typedef struct { float x0, y0, x1, y1; } TileBox;
+
+// Min-heaps of tile indices.
+static void tileHeapPush(int32_t* heap, int32_t* len, int32_t v) {
+    int32_t n = (*len)++;
+    heap[n] = v;
+    while (n > 0 && heap[(n - 1) / 2] > heap[n]) {
+        int32_t parent = (n - 1) / 2, t = heap[n];
+        heap[n] = heap[parent];
+        heap[parent] = t;
+        n = parent;
+    }
+}
+
+static int32_t tileHeapPop(int32_t* heap, int32_t* len) {
+    int32_t out = heap[0];
+    heap[0] = heap[--(*len)];
+    int32_t n = 0;
+    for (;;) {
+        int32_t l = 2 * n + 1, r = l + 1, m = n;
+        if (*len > l && heap[m] > heap[l]) m = l;
+        if (*len > r && heap[m] > heap[r]) m = r;
+        if (m == n) break;
+        int32_t t = heap[n];
+        heap[n] = heap[m];
+        heap[m] = t;
+        n = m;
+    }
+    return out;
+}
+
+static int compareInt32Asc(const void* a, const void* b) {
+    int32_t x = *(const int32_t*) a, y = *(const int32_t*) b;
+    return (x > y) - (x < y);
+}
+
+static void reorderTileRunForBatching(Runner* runner, Room* room, Drawable* tiles, int32_t start, int32_t count) {
+    Renderer* renderer = runner->renderer;
+    if (renderer == nullptr || renderer->vtable->tileBatchKey == nullptr || 3 > count) return;
+    int32_t* key = (int32_t*) safeMalloc((size_t) count * sizeof(int32_t));
+    int32_t switchesBefore = 0;
+    repeat(count, k) {
+        key[k] = renderer->vtable->tileBatchKey(renderer, &room->tiles[tiles[start + k].tileIndex]);
+        if (k > 0 && key[k] != key[k - 1]) switchesBefore++;
+    }
+    TileBox* box = nullptr;
+    int32_t* cellStarts = nullptr;
+    int32_t* cellItems = nullptr;
+    int32_t* edgeStarts = nullptr;
+    int32_t* edges = nullptr;
+    int32_t* indegree = nullptr;
+    int32_t* order = nullptr;
+    if (2 > switchesBefore) goto done;
+
+    // Boxes and a grid of the cells each tile covers.
+    box = (TileBox*) safeMalloc((size_t) count * sizeof(TileBox));
+    float minX = INFINITY, minY = INFINITY, maxX = -INFINITY, maxY = -INFINITY;
+    repeat(count, k) {
+        tileExtent(&room->tiles[tiles[start + k].tileIndex], &box[k].x0, &box[k].y0, &box[k].x1, &box[k].y1);
+        if (!isfinite(box[k].x0) || !isfinite(box[k].y0) || !isfinite(box[k].x1) || !isfinite(box[k].y1)) goto done;
+        if (minX > box[k].x0) minX = box[k].x0;
+        if (minY > box[k].y0) minY = box[k].y0;
+        if (box[k].x1 > maxX) maxX = box[k].x1;
+        if (box[k].y1 > maxY) maxY = box[k].y1;
+    }
+    float cell = TILE_BATCH_CELL;
+    int32_t columns, rows;
+    for (;;) {
+        float c = floorf((maxX - minX) / cell) + 1.0f, r = floorf((maxY - minY) / cell) + 1.0f;
+        if ((float) TILE_BATCH_MAX_CELLS >= c * r) { columns = (int32_t) c; rows = (int32_t) r; break; }
+        cell *= 2.0f;
+    }
+    #define TB_CX(v) ((int32_t) (((v) - minX) / cell) < columns ? (int32_t) (((v) - minX) / cell) : columns - 1)
+    #define TB_CY(v) ((int32_t) (((v) - minY) / cell) < rows ? (int32_t) (((v) - minY) / cell) : rows - 1)
+    cellStarts = (int32_t*) safeCalloc((size_t) columns * rows + 1, sizeof(int32_t));
+    int64_t covered = 0;
+    repeat(count, k) {
+        for (int32_t cy = TB_CY(box[k].y0); TB_CY(box[k].y1) >= cy; cy++)
+            for (int32_t cx = TB_CX(box[k].x0); TB_CX(box[k].x1) >= cx; cx++) { cellStarts[cy * columns + cx + 1]++; covered++; }
+    }
+    if (covered > (int64_t) count * 64) goto done; // huge tiles: not worth it
+    repeat(columns * rows, c) {
+        if (cellStarts[c + 1] > TILE_BATCH_MAX_PER_CELL) goto done;
+        cellStarts[c + 1] += cellStarts[c];
+    }
+    cellItems = (int32_t*) safeMalloc((size_t) covered * sizeof(int32_t));
+    {
+        int32_t* fill = (int32_t*) safeMalloc((size_t) columns * rows * sizeof(int32_t));
+        memcpy(fill, cellStarts, (size_t) columns * rows * sizeof(int32_t));
+        repeat(count, k) {
+            for (int32_t cy = TB_CY(box[k].y0); TB_CY(box[k].y1) >= cy; cy++)
+                for (int32_t cx = TB_CX(box[k].x0); TB_CX(box[k].x1) >= cx; cx++) cellItems[fill[cy * columns + cx]++] = (int32_t) k;
+        }
+        free(fill);
+    }
+
+    // Edges i -> j (i < j, overlapping). A pair is counted in one cell only: the one holding the top-left corner of
+    // their intersection.
+    edgeStarts = (int32_t*) safeCalloc((size_t) count + 1, sizeof(int32_t));
+    for (int pass = 0; 2 > pass; pass++) {
+        int32_t* fill = nullptr;
+        if (pass == 1) {
+            repeat(count, k) edgeStarts[k + 1] += edgeStarts[k];
+            edges = (int32_t*) safeMalloc((size_t) (edgeStarts[count] > 0 ? edgeStarts[count] : 1) * sizeof(int32_t));
+            fill = (int32_t*) safeMalloc((size_t) count * sizeof(int32_t));
+            memcpy(fill, edgeStarts, (size_t) count * sizeof(int32_t));
+        }
+        repeat(columns * rows, c) {
+            for (int32_t a = cellStarts[c]; cellStarts[c + 1] > a; a++) {
+                int32_t i = cellItems[a];
+                for (int32_t b = a + 1; cellStarts[c + 1] > b; b++) {
+                    int32_t j = cellItems[b]; // cellItems hold each cell's tiles in index order: i < j
+                    if (!(box[j].x1 > box[i].x0 && box[i].x1 > box[j].x0 && box[j].y1 > box[i].y0 && box[i].y1 > box[j].y0)) continue;
+                    float ix = box[i].x0 > box[j].x0 ? box[i].x0 : box[j].x0;
+                    float iy = box[i].y0 > box[j].y0 ? box[i].y0 : box[j].y0;
+                    if (TB_CY(iy) * columns + TB_CX(ix) != c) continue;
+                    if (pass == 0) edgeStarts[i + 1]++;
+                    else edges[fill[i]++] = j;
+                }
+            }
+        }
+        free(fill);
+    }
+    #undef TB_CX
+    #undef TB_CY
+
+    // Greedy topological order.
+    indegree = (int32_t*) safeCalloc((size_t) count, sizeof(int32_t));
+    repeat(edgeStarts[count], e) indegree[edges[e]]++;
+    order = (int32_t*) safeMalloc((size_t) count * sizeof(int32_t));
+    {
+        // Keys to dense ids.
+        int32_t* sortedKeys = (int32_t*) safeMalloc((size_t) count * sizeof(int32_t));
+        memcpy(sortedKeys, key, (size_t) count * sizeof(int32_t));
+        qsort(sortedKeys, (size_t) count, sizeof(int32_t), compareInt32Asc);
+        int32_t ids = 0;
+        repeat(count, k) if (k == 0 || sortedKeys[k] != sortedKeys[ids - 1]) sortedKeys[ids++] = sortedKeys[k];
+        int32_t* keyId = (int32_t*) safeMalloc((size_t) count * sizeof(int32_t));
+        repeat(count, k) {
+            int32_t lo = 0, hi = ids - 1;
+            while (hi > lo) { int32_t mid = (lo + hi) / 2; if (key[k] > sortedKeys[mid]) lo = mid + 1; else hi = mid; }
+            keyId[k] = lo;
+        }
+        // Per texture: its ready tiles, a min-heap of indices. Plus a min-heap of every ready tile (lazily skipping
+        // drawn ones) for the next texture.
+        int32_t* heapStore = (int32_t*) safeMalloc((size_t) count * 2 * sizeof(int32_t));
+        int32_t* idCount = (int32_t*) safeCalloc((size_t) ids + 1, sizeof(int32_t));
+        repeat(count, k) idCount[keyId[k] + 1]++;
+        repeat(ids, d) idCount[d + 1] += idCount[d];
+        int32_t* idBase = (int32_t*) safeMalloc((size_t) ids * sizeof(int32_t));
+        int32_t* idLen = (int32_t*) safeCalloc((size_t) ids, sizeof(int32_t));
+        memcpy(idBase, idCount, (size_t) ids * sizeof(int32_t));
+        int32_t* all = heapStore + count;
+        int32_t allLen = 0;
+        bool* drawn = (bool*) safeCalloc((size_t) count, sizeof(bool));
+        for (int32_t k = 0; count > k; k++) if (indegree[k] == 0) { tileHeapPush(heapStore + idBase[keyId[k]], &idLen[keyId[k]], (int32_t) k); tileHeapPush(all, &allLen, (int32_t) k); }
+        int32_t emitted = 0;
+        while (count > emitted) {
+            int32_t first = -1;
+            while (allLen > 0) { int32_t v; v = tileHeapPop(all, &allLen); if (!drawn[v]) { first = v; break; } }
+            if (first < 0) break; // can't happen: the edges only go forward
+            int32_t d = keyId[first];
+            while (idLen[d] > 0) {
+                int32_t v;
+                v = tileHeapPop(heapStore + idBase[d], &idLen[d]);
+                drawn[v] = true;
+                order[emitted++] = v;
+                for (int32_t e = edgeStarts[v]; edgeStarts[v + 1] > e; e++) {
+                    int32_t w = edges[e];
+                    if (--indegree[w] == 0) { tileHeapPush(heapStore + idBase[keyId[w]], &idLen[keyId[w]], w); tileHeapPush(all, &allLen, w); }
+                }
+            }
+        }
+        free(drawn);
+        free(idLen);
+        free(idBase);
+        free(idCount);
+        free(heapStore);
+        free(keyId);
+        free(sortedKeys);
+        if (emitted != count) goto done;
+    }
+    {
+        static int check = -1;
+        if (check < 0) check = getenv("BS_TILEBATCH_CHECK") != nullptr;
+        if (check) {
+            // Desktop check: every overlapping pair kept its order.
+            int32_t* pos = (int32_t*) safeMalloc((size_t) count * sizeof(int32_t));
+            repeat(count, k) pos[order[k]] = (int32_t) k;
+            int32_t bad = 0, after = 0;
+            repeat(count, k) if (k > 0 && key[order[k]] != key[order[k - 1]]) after++;
+            for (int32_t i = 0; count > i; i++)
+                for (int32_t j = i + 1; count > j; j++)
+                    if (box[j].x1 > box[i].x0 && box[i].x1 > box[j].x0 && box[j].y1 > box[i].y0 && box[i].y1 > box[j].y0 && pos[i] > pos[j]) bad++;
+            fprintf(stderr, "TILEBATCH depth %d: %d tiles, %d edges, switches %d -> %d, order broken %d\n", (int) tiles[start].depth,
+                (int) count, (int) edgeStarts[count], (int) switchesBefore, (int) after, (int) bad);
+            free(pos);
+        }
+        Drawable* copy = (Drawable*) safeMalloc((size_t) count * sizeof(Drawable));
+        memcpy(copy, &tiles[start], (size_t) count * sizeof(Drawable));
+        // The ranks stay the run's (ascending in draw order), so the list still reads as sorted.
+        repeat(count, k) {
+            int32_t rank = tiles[start + k].tileRank;
+            tiles[start + k] = copy[order[k]];
+            tiles[start + k].tileRank = rank;
+        }
+        free(copy);
+    }
+done:
+    free(order);
+    free(indegree);
+    free(edges);
+    free(edgeStarts);
+    free(cellItems);
+    free(cellStarts);
+    free(box);
+    free(key);
+}
+
 static void buildTileRuns(Runner* runner, Room* room) {
     freeTileRuns(runner);
     Drawable* tiles = runner->cachedStaticDrawables;
@@ -923,6 +1150,7 @@ static void buildTileRuns(Runner* runner, Room* room) {
         while (total > end && tiles[end].type == DRAWABLE_TILE && tiles[end].depth == tiles[start].depth) end++;
         if (end == start) end = start + 1; // not a tile (can't happen in GMS1): its own run, never culled
 
+        if (tiles[start].type == DRAWABLE_TILE) reorderTileRunForBatching(runner, room, tiles, start, end - start);
         TileRun run;
         ZERO_STRUCT(run);
         run.depth = tiles[start].depth;
@@ -1088,6 +1316,7 @@ static void rebuildDrawableCacheIfDirty(Runner* runner) {
                 d.type = DRAWABLE_TILE;
                 d.depth = tile->tileDepth;
                 d.tileIndex = (int32_t) i;
+                d.tileRank = (int32_t) i;
                 arrput(runner->cachedStaticDrawables, d);
             }
         } else {

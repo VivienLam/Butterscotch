@@ -43,7 +43,8 @@ static struct {
     // Builtins the natives call.
     BuiltinFunc collisionLine, drawSprite, drawSpriteExt, drawBackground, drawSetBlendMode, drawSetColourWriteEnable,
         random, drawText, drawTextColor, drawSetFont, drawSetAlpha, drawSetColor, string, makeColorRgb, makeColorHsv,
-        surfaceSetTarget, surfaceResetTarget, drawClear, drawRectangle, drawBackgroundExt;
+        surfaceSetTarget, surfaceResetTarget, drawClear, drawRectangle, drawBackgroundExt, keyboardCheck,
+        gamepadButtonCheck, gamepadIsSupported, gamepadIsConnected, gamepadAxisValue, gamepadSetVibration;
     // Objects.
     int32_t objSolid, objControl, objCharacter;
 } N;
@@ -150,12 +151,18 @@ static inline RValue R(GMLReal v) {
     return RValue_makeReal(v);
 }
 
+// True while draw_gui runs on a frameskip step whose frame is never shown: the HUD's variables are still set, nothing
+// is drawn (see N3DSAm2rNative_setHiddenStep).
+static bool gNoDraw = false;
+
 static void drawSprite(GMLReal sprite, GMLReal sub, GMLReal x, GMLReal y) {
+    if (gNoDraw) return;
     RValue a[4] = { R(sprite), R(sub), R(x), R(y) };
     callVoid(N.drawSprite, a, 4);
 }
 
 static void drawSpriteExt(GMLReal sprite, GMLReal sub, GMLReal x, GMLReal y, GMLReal xs, GMLReal ys, GMLReal rot, GMLReal colour, GMLReal alpha) {
+    if (gNoDraw) return;
     RValue a[9] = { R(sprite), R(sub), R(x), R(y), R(xs), R(ys), R(rot), R(colour), R(alpha) };
     callVoid(N.drawSpriteExt, a, 9);
 }
@@ -447,7 +454,40 @@ static RValue native_draw_gui_map(VMContext* ctx, RValue* args, int32_t argCount
     return R(0.0);
 }
 
+// ===[ The HUD on frameskip's hidden steps ]===
+// oControl's Step clears gui_surface and redraws the whole HUD into it, every step. With the frameskip, the second
+// step of a frame repaints what the first one painted and only that one is shown: on a step flagged hidden (the
+// frameskip's extra step), oControl's draw_clear_alpha is skipped and draw_gui sets its variables without drawing, so
+// the surface keeps the HUD of the frame's first step (one step, 1/60 s, older). Anything unexpected (the game's own
+// draw_gui running, another object drawing into the surface) gets the normal clear and drawing.
+static bool gHiddenStep = false, gHudSkipping = false, gHudSkipOk = false;
+static BuiltinFunc gDrawClearAlphaOriginal = NULL;
+static int32_t gDrawClearAlphaFunc = -1, gObjA4EscapeControl = -1, gCode_oControlStep = -1;
+
+static RValue hook_draw_clear_alpha(VMContext* ctx, RValue* args, int32_t argCount) {
+    Instance* self = (Instance*) ctx->currentInstance;
+    if (gHiddenStep && ctx->currentCodeIndex == gCode_oControlStep && self != NULL && self->objectIndex == N.objControl &&
+        (gObjA4EscapeControl < 0 || VM_findInstanceByTarget(ctx, gObjA4EscapeControl) == NULL)) {
+        gHudSkipping = true;
+        return RValue_makeUndefined();
+    }
+    return gDrawClearAlphaOriginal(ctx, args, argCount);
+}
+
+// The clear skipped above, when draw_gui ends up drawing after all.
+static void hudClearNow(void) {
+    RValue a[2] = { R(0), R(0) };
+    RValue r = gDrawClearAlphaOriginal(N.vm, a, 2);
+    RValue_free(&r);
+}
+
+void N3DSAm2rNative_setHiddenStep(bool hidden) {
+    gHiddenStep = hidden;
+    gHudSkipping = false;
+}
+
 #include "n3ds_am2r_native_hud.inc"
+#include "n3ds_am2r_native_input.inc"
 
 // ===[ Events ]===
 
@@ -687,6 +727,7 @@ static NativeEntry gEntries[] = {
     { "moveTo", native_moveTo, NULL, 0, -1, false },
     { "isCollisionPlatformBottom", native_isCollisionPlatformBottom, NULL, 0, -1, false },
     { "platformCharacterIs", native_platformCharacterIs, NULL, 0, -1, false },
+    { "check_keys", native_check_keys, NULL, 0, -1, false },
 };
 #define N_ENTRIES ((int32_t) (sizeof(gEntries) / sizeof(gEntries[0])))
 
@@ -720,6 +761,9 @@ static void install(bool on) {
         N.vm->funcCallCache[N.hooks[k].funcIndex].builtin = on ? (void*) e->script : N.hooks[k].original;
     }
     N.runner->nativeEventCode = on ? N.events : NULL;
+    if (gDrawClearAlphaFunc >= 0) {
+        N.vm->funcCallCache[gDrawClearAlphaFunc].builtin = on ? (void*) hook_draw_clear_alpha : (void*) gDrawClearAlphaOriginal;
+    }
 }
 
 void N3DSAm2rNative_init(Runner* runner) {
@@ -747,6 +791,12 @@ void N3DSAm2rNative_init(Runner* runner) {
     N.drawClear = builtin("draw_clear");
     N.drawRectangle = builtin("draw_rectangle");
     N.drawBackgroundExt = builtin("draw_background_ext");
+    N.keyboardCheck = builtin("keyboard_check");
+    N.gamepadButtonCheck = builtin("gamepad_button_check");
+    N.gamepadIsSupported = builtin("gamepad_is_supported");
+    N.gamepadIsConnected = builtin("gamepad_is_connected");
+    N.gamepadAxisValue = builtin("gamepad_axis_value");
+    N.gamepadSetVibration = builtin("gamepad_set_vibration");
     N.objCharacter = N3DSGml_objectIndex("oCharacter");
     gObjLight = N3DSGml_objectIndex("oLight");
     gObjBeam = N3DSGml_objectIndex("oBeam");
@@ -786,7 +836,8 @@ void N3DSAm2rNative_init(Runner* runner) {
         N.drawText == NULL || N.drawTextColor == NULL || N.drawSetFont == NULL || N.drawSetAlpha == NULL ||
         N.drawSetColor == NULL || N.string == NULL || N.makeColorRgb == NULL || N.makeColorHsv == NULL ||
         N.surfaceSetTarget == NULL || N.surfaceResetTarget == NULL || N.drawClear == NULL || N.drawRectangle == NULL ||
-        N.drawBackgroundExt == NULL || N.objCharacter < 0 || gObjLight < 0 || gObjBeam < 0 || gObjMissile < 0 || gObjBomb < 0 || gObjBomb2 < 0 || gObjPickup < 0 || gObjMGammaElec < 0 || gObjGlowPlant1 < 0 || gObjSpikePlant < 0 || gObjPincherFly < 0 || gObjA3LabLight < 0 || gObjA3LabDoor < 0 || gObjFXAnimSpark < 0 || gObjLightBug < 0 || gObjChargeBeamSpark1 < 0 || gObjItemBall < 0 || gObjItem < 0 || gObjDoor < 0 || gObjMOmegaFlame < 0 || gObjMOmegaProjectile < 0 || gObjA8Lamp < 0 || gObjA8RedLight < 0 || gObjA6Dust < 0 || gObjA8RedLightFX < 0 || gObjGenesisAcid < 0 || gObjGenesisSlashProj < 0 || gObjElderSeptogg < 0 || gObjXPickup < 0 || gObjCoreX < 0 ||
+        N.drawBackgroundExt == NULL || N.keyboardCheck == NULL || N.gamepadButtonCheck == NULL || N.gamepadIsSupported == NULL ||
+        N.gamepadIsConnected == NULL || N.gamepadAxisValue == NULL || N.objCharacter < 0 || gObjLight < 0 || gObjBeam < 0 || gObjMissile < 0 || gObjBomb < 0 || gObjBomb2 < 0 || gObjPickup < 0 || gObjMGammaElec < 0 || gObjGlowPlant1 < 0 || gObjSpikePlant < 0 || gObjPincherFly < 0 || gObjA3LabLight < 0 || gObjA3LabDoor < 0 || gObjFXAnimSpark < 0 || gObjLightBug < 0 || gObjChargeBeamSpark1 < 0 || gObjItemBall < 0 || gObjItem < 0 || gObjDoor < 0 || gObjMOmegaFlame < 0 || gObjMOmegaProjectile < 0 || gObjA8Lamp < 0 || gObjA8RedLight < 0 || gObjA6Dust < 0 || gObjA8RedLightFX < 0 || gObjGenesisAcid < 0 || gObjGenesisSlashProj < 0 || gObjElderSeptogg < 0 || gObjXPickup < 0 || gObjCoreX < 0 ||
         b_image_xscale < 0 || b_image_blend < 0 || b_view_xview < 0 || b_view_yview < 0) {
         logInfo("AM2R natives: not this game\n");
         return;
@@ -801,6 +852,14 @@ void N3DSAm2rNative_init(Runner* runner) {
         &v_IN_AIR, &v_ON_LADDER, &v_RUNNING, &v_STANDING, &v_DUCKING, &v_BALL, &v_JUMPING, &v_FALLING, &v_AIRBALL, &v_CLIMBING };
     for (size_t k = 0; k < sizeof(moveVars) / sizeof(moveVars[0]); k++) resolveVar(moveVars[k]);
     gObjPlatform = N3DSGml_objectIndex("oPlatform");
+    for (int32_t k = 0; k < CK_COUNT; k++) {
+        resolveVar(&v_ctrl[k]);
+        resolveVar(&v_keybtn[k]);
+        if (v_joybtn[k].name != NULL) resolveVar(&v_joybtn[k]);
+    }
+    Var* inputVars[] = { &v_walk_zone, &v_xjoyx, &v_xjoyy, &v_controltype, &v_opaimstyle, &v_gamepadIndex, &v_opxjoyenable,
+        &v_opxjoyvib, &v_vibL, &v_vibR, &v_opxjoydz, &v_joydetected, &v_openablejoy };
+    for (size_t k = 0; k < sizeof(inputVars) / sizeof(inputVars[0]); k++) resolveVar(inputVars[k]);
     for (int32_t k = 1; k <= 15; k++) {
         snprintf(gMapVarNames[k], sizeof(gMapVarNames[k]), "m%d", (int) k);
         snprintf(gMapVarNames[16 + k], sizeof(gMapVarNames[16 + k]), "dm%d", (int) k);
@@ -851,6 +910,15 @@ void N3DSAm2rNative_init(Runner* runner) {
     gCode_isCollisionPlatformBottom = gEntries[15].code;
     gCode_platformCharacterIs = gEntries[16].code;
     E_isCollisionPlatformBottom = 15;
+    gCode_check_keys = gEntries[17].code;
+    gCode_is_walkzone = N3DSGml_scriptIndex("is_walkzone");
+    gCode_is_past_deadzone = N3DSGml_scriptIndex("is_past_deadzone");
+    if (gCode_is_walkzone < 0 || gCode_is_past_deadzone < 0) {
+        gEntries[17].matches = false;
+        for (ptrdiff_t k = arrlen(N.hooks) - 1; k >= 0; k--) {
+            if (N.hooks[k].entry == 17) arrdel(N.hooks, k);
+        }
+    }
     gCode_gui_health = N3DSGml_scriptIndex("gui_health");
     gCode_to_string_lz = N3DSGml_scriptIndex("to_string_lz");
     if (gCode_gui_health < 0 || gCode_to_string_lz < 0) {
@@ -859,6 +927,23 @@ void N3DSAm2rNative_init(Runner* runner) {
         for (ptrdiff_t k = arrlen(N.hooks) - 1; k >= 0; k--) {
             if (N.hooks[k].entry == 12) arrdel(N.hooks, k);
         }
+    }
+    // The hidden-step HUD: only with the native draw_gui and oControl's Step as written for.
+    {
+        int32_t step = codeIndexByName("gml_Object_oControl_Step_0");
+        uint32_t expected = N3DSAm2rNative_expectedHash("gml_Object_oControl_Step_0");
+        gHudSkipOk = gEntries[12].matches && step >= 0 && expected != 0 && codeHash(step) == expected;
+        gCode_oControlStep = step;
+        if (step >= 0 && !gHudSkipOk) logInfo("AM2R natives: HUD skip off (oControl Step %08lx)\n", (unsigned long) codeHash(step));
+        gObjA4EscapeControl = N3DSGml_objectIndex("oA4EscapeControl");
+        DataWin* dw = runner->dataWin;
+        for (uint32_t f = 0; gHudSkipOk && f < N.vm->funcCallCacheCount; f++) {
+            if (dw->func.functions[f].name == NULL || strcmp(dw->func.functions[f].name, "draw_clear_alpha") != 0) continue;
+            gDrawClearAlphaFunc = (int32_t) f;
+            gDrawClearAlphaOriginal = (BuiltinFunc) N.vm->funcCallCache[f].builtin;
+            break;
+        }
+        if (gDrawClearAlphaOriginal == NULL) gDrawClearAlphaFunc = -1;
     }
     N.initialised = true;
     logInfo("AM2R natives: %ld of %ld match this game\n", (long) N.available, (long) N_ENTRIES);

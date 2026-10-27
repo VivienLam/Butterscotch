@@ -19,12 +19,14 @@ static uint32_t N3DSAm2rNative_expectedHash(const char* name) {
         { "draw_mapblock", 0x46bb394f },
         { "draw_gui_map", 0x1e5a39d1 },
         { "gml_Object_oA6Dust_Draw_0", 0x8534288c },
+        { "gml_Object_oControl_Step_0", 0x087b7cfa }, // not a native: the HUD skip checks oControl Step is this one
         { "gml_Object_oEnemy_Draw_0", 0x900b9ce8 },
         { "draw_gui", 0xcd167e8f },
         { "gml_Object_oLightEngine_Other_11", 0x5752b1d6 },
         { "moveTo", 0x083e4e99 },
         { "isCollisionPlatformBottom", 0xd69dd806 },
         { "platformCharacterIs", 0x07c324ff },
+        { "check_keys", 0x825084dc },
     };
     for (size_t k = 0; k < sizeof(kHashes) / sizeof(kHashes[0]); k++) {
         if (strcmp(kHashes[k].name, name) == 0) return kHashes[k].hash;
