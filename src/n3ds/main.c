@@ -13,6 +13,7 @@
 #include "../input_recording.h"
 #include "../overlay_file_system.h"
 #include "n3ds_audio_system.h"
+#include "n3ds_gml.h"
 #include "n3ds_cached_file_system.h"
 #include "n3ds_input.h"
 #include "n3ds_am2r.h"
@@ -891,6 +892,14 @@ int main(int argc, char** argv) {
             N3DSAudio_prewarmRoom(runner->audioSystem, runner);
 #endif
             N3DSProf_end(N3DS_PROF_PREWARM, prewarmStart);
+            // AM2R: the fade room knows where it goes (global.targetroom); read that room's pages during the fade.
+            {
+                static int32_t transitionRoom = -2;
+                if (transitionRoom == -2) transitionRoom = N3DSGml_roomIndex("rm_transition");
+                double target = -1.0;
+                if (transitionRoom >= 0 && runner->currentRoomIndex == transitionRoom && N3DSGml_getGlobal("targetroom", -1, &target))
+                    N3DSRenderer_readAheadRoom(renderer, (int32_t) target);
+            }
             N3DS_logMemory("room start");
         }
 

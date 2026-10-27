@@ -85,6 +85,11 @@ static uint32_t N3DSAm2rNative_expectedHash(const char* name) {
         { "gml_Object_oCharacter_Step_1", 0xd3ff2cbb }, // AOT
         { "gml_Object_oPickup_Draw_0", 0x399021c2 }, // AOT
         { "gml_Object_oShip1_Draw_0", 0x7c367357 }, // AOT
+        { "gml_Object_oLavaSurface_Draw_0", 0x4d95db07 }, // AOT
+        { "gml_Object_oTsumuri_Step_0", 0xd23a7e0f }, // AOT
+        { "gml_Object_oTsumuri_Step_1", 0x109adbd0 }, // AOT
+        { "gml_Object_oFXAnimSpark_Draw_0", 0x401715a6 }, // AOT
+        { "gml_Object_oLavaBGFX_Draw_0", 0xc5dc1c29 }, // AOT
         { "gml_Object_oBackground_Draw_0", 0x49cac72a },
         { "gml_Object_oTitleAnimation_Draw_0", 0x7c755899 },
     };

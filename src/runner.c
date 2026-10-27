@@ -106,6 +106,7 @@ void Runner_addInstanceToObjectLists(Runner* runner, Instance* inst) {
         arrput(runner->instancesByExactObject[inst->objectIndex], inst);
     }
     SpatialGrid_markInstanceAsDirty(runner->spatialGrid, inst);
+    runner->objectListsGen++;
 }
 
 // Stable remove of inst from list, preserving creation order. Returns true if removed.
@@ -134,10 +135,12 @@ void Runner_removeInstanceFromObjectLists(Runner* runner, Instance* inst) {
     if (inst->objectIndex >= 0 && dataWin->objt.count > (uint32_t) inst->objectIndex) {
         removeInstanceFromList(&runner->instancesByExactObject[inst->objectIndex], inst);
     }
+    runner->objectListsGen++;
 }
 
 void Runner_clearAllObjectLists(Runner* runner) {
     if (runner->instancesByObject == nullptr) return;
+    runner->objectListsGen++;
     uint32_t count = runner->dataWin->objt.count;
     repeat(count, i) {
         arrsetlen(runner->instancesByObject[i], 0);
@@ -4115,11 +4118,33 @@ static void dispatchCollisionEvents(Runner* runner) {
                 if (!self->active) break;
 
                 // Iterate only the descendant-inclusive list for the target object via a snapshot, so nested user code (collision handlers calling instance_exists, with (...), etc.) can push/pop their own snapshots above ours without corrupting this iteration.
-                int32_t snapBase = Runner_pushInstancesOfObject(runner, targetObjIndex);
+                // The YoYo Runner sorts it by the object index THEN by the instanceId. The sorted list is kept per
+                // target until an instance is created, destroyed or changed (same set -> same sorted order).
+                int32_t snapBase = (int32_t) arrlen(runner->instanceSnapshots);
+                if (0 > targetObjIndex || (uint32_t) targetObjIndex >= dataWin->objt.count) continue;
+                if (runner->collisionSortedTargets == nullptr) {
+                    runner->collisionSortedTargets = safeCalloc(dataWin->objt.count, sizeof(Instance**));
+                    runner->collisionSortedGen = safeCalloc(dataWin->objt.count, sizeof(uint32_t));
+                }
+                if (runner->collisionSortedGen[targetObjIndex] != runner->objectListsGen + 1u) {
+                    Instance** src = runner->instancesByObject[targetObjIndex];
+                    int32_t n = (int32_t) arrlen(src);
+                    arrsetlen(runner->collisionSortedTargets[targetObjIndex], n);
+                    if (n > 0) {
+                        memcpy(runner->collisionSortedTargets[targetObjIndex], src, (size_t) n * sizeof(Instance*));
+                        qsort(runner->collisionSortedTargets[targetObjIndex], n, sizeof(Instance*), sortInstancesByObjectIndexThenInstanceIdAscending);
+                    }
+                    runner->collisionSortedGen[targetObjIndex] = runner->objectListsGen + 1u;
+                }
+                {
+                    Instance** sorted = runner->collisionSortedTargets[targetObjIndex];
+                    int32_t n = (int32_t) arrlen(sorted);
+                    if (n > 0) {
+                        arrsetlen(runner->instanceSnapshots, snapBase + n);
+                        memcpy(&runner->instanceSnapshots[snapBase], sorted, (size_t) n * sizeof(Instance*));
+                    }
+                }
                 int32_t snapEnd = (int32_t) arrlen(runner->instanceSnapshots);
-
-                // The YoYo Runner sorts it by the object index THEN by the instanceId
-                qsort(runner->instanceSnapshots + snapBase, snapEnd - snapBase, sizeof(Instance*), sortInstancesByObjectIndexThenInstanceIdAscending);
 
                 for (int32_t snapIdx = snapBase; snapEnd > snapIdx; snapIdx++) {
                     // A collision handler that destroyed self (AM2R oWaterDrop: event_user -> instance_destroy, after
@@ -5666,6 +5691,13 @@ void Runner_free(Runner* runner) {
         }
         free(runner->instancesByObject);
         runner->instancesByObject = nullptr;
+        if (runner->collisionSortedTargets != nullptr) {
+            repeat(objectCount, i) arrfree(runner->collisionSortedTargets[i]);
+            free(runner->collisionSortedTargets);
+            free(runner->collisionSortedGen);
+            runner->collisionSortedTargets = nullptr;
+            runner->collisionSortedGen = nullptr;
+        }
     }
 
     {

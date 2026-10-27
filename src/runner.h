@@ -719,6 +719,12 @@ struct Runner {
     Instance*** instancesByObject;
     // Same as instancesByObject but each instance only appears in the bucket of its EXACT objectIndex (no ancestors). Used by event dispatch so we don't double-fire when both a child and its parent declare the same event.
     Instance*** instancesByExactObject;
+    // Bumped on every change to the per-object lists; collision dispatch keeps each target's sorted list
+    // (collisionSortedTargets[obj], valid while collisionSortedGen[obj] == objectListsGen) instead of re-sorting it
+    // for every instance that has a collision event.
+    uint32_t objectListsGen;
+    Instance*** collisionSortedTargets;
+    uint32_t* collisionSortedGen;
     // Precomputed (eventType, eventSubtype) -> dense slot remap. Built once at Runner_create, never mutated.
     EventSlotMap eventSlotMap;
     // Precomputed per-object and per-slot CSR tables of resolved event handlers. Replaces the per-dispatch parent-chain walk in findEventCodeIdAndOwner.

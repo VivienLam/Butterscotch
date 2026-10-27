@@ -46,6 +46,8 @@ bool N3DSRenderer_drawCachedTileEntry(Renderer* renderer, int32_t tileEntryIndex
 // Loads the textures a room is likely to need (call when the room changes).
 void N3DSRenderer_prewarmRoom(Renderer* renderer, Runner* runner);
 void N3DSRenderer_importReadAhead(Renderer* renderer);
+// Reads and imports a room's pages ahead of time, a few per frame (during a transition into it).
+void N3DSRenderer_readAheadRoom(Renderer* renderer, int32_t roomIndex);
 // The frame gate (see n3ds_renderer.c): frameGate opens the GPU frame if it isn't open (C3D_FrameBegin: waits for the
 // previous frame and the vblank); frameEnd submits it.
 void N3DSRenderer_frameGate(void);

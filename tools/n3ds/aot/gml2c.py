@@ -149,7 +149,18 @@ class Parser:
             if kw == 'for':
                 self.i += 1
                 self.take('(')
-                init = None if self.at(';') else self.simple_statement()
+                if self.at('var'):
+                    self.i += 1
+                    decls = []
+                    while True:
+                        name = self.take().text
+                        vinit = self.expr() if self.opt('=') else None
+                        decls.append((name, vinit))
+                        if not self.opt(','):
+                            break
+                    init = ('var', decls)
+                else:
+                    init = None if self.at(';') else self.simple_statement()
                 self.take(';')
                 c = None if self.at(';') else self.expr()
                 self.take(';')

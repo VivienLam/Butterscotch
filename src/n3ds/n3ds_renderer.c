@@ -3991,6 +3991,79 @@ static void N3DSRenderer_readAheadPage(N3DSRenderer* renderer, uint32_t pageInde
 // Turns one read-ahead page whose data has arrived into a texture (call with the frame open, before drawing): the
 // import (a copy into linear memory, a few ms for a 512 KB page) then happens before it is needed instead of in the
 // middle of the frame that first draws it.
+// Read-ahead of the room a transition is about to enter (AM2R goes old room -> rm_transition -> new room, the
+// fade lasting about 20 frames that mostly wait for the screen): the new room's tile, background and object pages
+// are read by the background loader and imported one per frame (N3DSRenderer_importReadAhead) during the fade,
+// instead of in the new room's first frame (150-300 ms of card reads and imports on the Old 3DS).
+static uint32_t N3DSRenderer_readAheadPageCounted(N3DSRenderer* renderer, bool* seenPages, uint32_t pageIndex, uint32_t* budget) {
+    if (pageIndex >= renderer->atlasPageCount || seenPages[pageIndex] || *budget == 0) return 0;
+    seenPages[pageIndex] = true;
+    N3DSLoadedAtlasPage* page = &renderer->atlasPages[pageIndex];
+    if (page->ready) {
+        page->blobLastUsedStamp = ++renderer->blobUseCounter;
+        return 0;
+    }
+    N3DSRenderer_readAheadPage(renderer, pageIndex);
+    (*budget)--;
+    return 1;
+}
+
+static void N3DSRenderer_readAheadTPAG(N3DSRenderer* renderer, bool* seenPages, int32_t tpagIndex, uint32_t* budget) {
+    if (tpagIndex < 0 || (uint32_t) tpagIndex >= renderer->atlasItemCount) return;
+    if (N3DSRenderer_isFragmentedAtlasVersion(renderer->atlasVersion)) {
+        N3DSAtlasItemV3* item = &renderer->atlasItemsV3[tpagIndex];
+        repeat(item->fragmentCount, i) {
+            uint32_t fragmentIndex = item->fragmentStart + (uint32_t) i;
+            if (fragmentIndex >= renderer->atlasFragmentCount) break;
+            N3DSRenderer_readAheadPageCounted(renderer, seenPages, renderer->atlasFragments[fragmentIndex].atlasId, budget);
+        }
+        return;
+    }
+    N3DSRenderer_readAheadPageCounted(renderer, seenPages, renderer->atlasItems[tpagIndex].atlasId, budget);
+}
+
+void N3DSRenderer_readAheadRoom(Renderer* base, int32_t roomIndex) {
+    N3DSRenderer* renderer = (N3DSRenderer*) base;
+    DataWin* dw = base->dataWin;
+    if (!renderer->blobLoaderRunning || renderer->atlasPageCount == 0 || dw == NULL || roomIndex < 0 || (uint32_t) roomIndex >= dw->room.count) return;
+    Room* room = &dw->room.rooms[roomIndex];
+    bool* seenPages = safeCalloc(renderer->atlasPageCount, sizeof(bool));
+    // About one import per fade frame; the rest stays queued in the RAM cache only.
+    uint32_t budget = renderer->isNew3DS ? 48u : 24u;
+    uint32_t queued = 0;
+
+    // Tiles first (the whole first frame is made of them), then the room's backgrounds, then its objects' sprites.
+    repeat(room->tileCount, tileIndex) {
+        N3DSTileAtlasEntry* entry = N3DSRenderer_findTileEntry(renderer, &room->tiles[tileIndex]);
+        if (entry == NULL) continue;
+        if (entry->fragmentCount > 0) {
+            for (uint32_t i = 0; i < (uint32_t) entry->fragmentCount; ++i) {
+                uint32_t fragmentIndex = entry->fragmentStart + i;
+                if (fragmentIndex >= renderer->atlasFragmentCount) break;
+                queued += N3DSRenderer_readAheadPageCounted(renderer, seenPages, renderer->atlasFragments[fragmentIndex].atlasId, &budget);
+            }
+        } else {
+            queued += N3DSRenderer_readAheadPageCounted(renderer, seenPages, entry->atlasId, &budget);
+        }
+        if (budget == 0) break;
+    }
+    if (room->backgrounds != NULL) {
+        repeat(8, i) {
+            if (budget == 0 || !room->backgrounds[i].enabled || room->backgrounds[i].backgroundDefinition < 0) continue;
+            N3DSRenderer_readAheadTPAG(renderer, seenPages, Renderer_resolveBackgroundTPAGIndex(dw, room->backgrounds[i].backgroundDefinition), &budget);
+        }
+    }
+    const N3DSRoomManifestEntry* manifest = N3DSRenderer_findRoomManifestEntry(renderer, (uint32_t) roomIndex);
+    if (manifest != NULL && manifest->pageStart <= renderer->roomManifestPageRefCount &&
+        manifest->pageCount <= renderer->roomManifestPageRefCount - manifest->pageStart) {
+        for (uint32_t i = 0; i < (uint32_t) manifest->pageCount && budget > 0; ++i) {
+            queued += N3DSRenderer_readAheadPageCounted(renderer, seenPages, renderer->roomManifestPageRefs[manifest->pageStart + i].pageIndex, &budget);
+        }
+    }
+    free(seenPages);
+    logInfo("N3DS: read-ahead for %s: %lu pages\n", room->name, (unsigned long) queued);
+}
+
 void N3DSRenderer_importReadAhead(Renderer* base) {
     N3DSRenderer* renderer = (N3DSRenderer*) base;
     if (!renderer->blobLoaderRunning) return;

@@ -57,3 +57,8 @@ oGravitt:3:0
 oDoor:8:0
 oCharacter:8:0
 oControl:8:72
+oLavaSurface:8:0
+oTsumuri:3:0
+oTsumuri:3:1
+oFXAnimSpark:8:0
+oLavaBGFX:8:0
