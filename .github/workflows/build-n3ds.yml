@@ -59,10 +59,15 @@ jobs:
 
       - name: Build
         run: |
+          set -o pipefail
+          # Compiler errors also go out as annotations (readable from the API without the raw log).
           tools/n3ds/build.sh build \
             -DN3DS_TOOLS_DIR=/opt/n3ds-tools \
             "-DBUTTERSCOTCH_COMMIT_HASH=${{ steps.commit-info.outputs.hash }}" \
-            "-DBUTTERSCOTCH_COMMIT_DATE=${{ steps.commit-info.outputs.date }}"
+            "-DBUTTERSCOTCH_COMMIT_DATE=${{ steps.commit-info.outputs.date }}" 2>&1 | tee build.log || {
+            grep -E 'error|undefined reference' build.log | head -20 | while IFS= read -r line; do echo "::error::${line}"; done
+            exit 1
+          }
           mkdir -p out
           cp build/am2r.cia build/am2r.3dsx out/
           cp build/butterscotch.elf out/am2r.elf
