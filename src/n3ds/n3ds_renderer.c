@@ -53,7 +53,9 @@ static inline bool Renderer_isFiniteFloat(float v) { return isfinite(v); }
 #define N3DS_TILE_LAYER_CHUNK_VRAM_BUDGET (512u * 1024u)
 #define N3DS_MAX_RESIDENT_ATLAS_PAGES_OLD3DS 32u
 #define N3DS_MAX_RESIDENT_ATLAS_PAGES_NEW3DS 32u
-#define N3DS_MAX_RESIDENT_ATLAS_PAGES_OLD3DS_ETC1A4 40u
+// Old 3DS: rm_a0h01 needs more than 40 of the (mostly 128 KB) ETC1A4 pages; at 40 it re-imported ~30 a second with
+// 7 MB of linear memory still free. The linear reserve below is what really bounds residency.
+#define N3DS_MAX_RESIDENT_ATLAS_PAGES_OLD3DS_ETC1A4 112u
 #define N3DS_MAX_RESIDENT_ATLAS_PAGES_NEW3DS_ETC1A4 80u
 #define N3DS_PREWARM_GPU_PAGE_BUDGET_OLD3DS 12u
 #define N3DS_PREWARM_GPU_PAGE_BUDGET_NEW3DS 32u
@@ -62,7 +64,7 @@ static inline bool Renderer_isFiniteFloat(float v) { return isfinite(v); }
 // Old 3DS: room prewarm reads into the page-data cache (8 MB there); keep it to half so a room change can't fill it.
 #define N3DS_PREWARM_BLOB_BYTES_OLD3DS (4u * 1024u * 1024u)
 #define N3DS_PREWARM_BLOB_BYTES_NEW3DS (12u * 1024u * 1024u)
-#define N3DS_RESIDENT_ATLAS_VRAM_BUDGET_OLD3DS (2560u * 1024u)
+#define N3DS_RESIDENT_ATLAS_VRAM_BUDGET_OLD3DS (6144u * 1024u)
 #define N3DS_RESIDENT_ATLAS_VRAM_BUDGET_NEW3DS (5120u * 1024u)
 // Atlas pages live in linear memory, not VRAM: past the budget above, a page still in use (drawn within the last
 // N3DS_ATLAS_IDLE_FRAMES) is kept as long as linear memory has this much left. Evicting in-use pages made a room
@@ -6382,12 +6384,21 @@ static RendererVtable N3DSRenderer_vtable = {
 // code did.
 static bool gFrameOpen;
 static double gFrameWaitMs, gFrameGpuMs;
+static u32 gFrameLastTick;
+static bool gFrameTickValid;
 
 void N3DSRenderer_frameGate(void) {
     if (gFrameOpen) return;
     N3DS_ZONE(N3DS_ZONE_FRAME_WAIT);
     u64 start = svcGetSystemTick();
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    // SYNCDRAW waits for the *next* pacing tick even when this frame is already late (a tick passed while the step
+    // ran), which on Old 3DS added ~20 ms a frame in busy rooms. When a tick has passed since the last frame began, only
+    // wait for the GPU; on time, keep the VBlank pacing.
+    u32 tick = C3D_FrameCounter(0);
+    bool late = gFrameTickValid && tick != gFrameLastTick;
+    C3D_FrameBegin(late ? 0 : C3D_FRAME_SYNCDRAW);
+    gFrameLastTick = C3D_FrameCounter(0);
+    gFrameTickValid = true;
     gFrameWaitMs = (double) (svcGetSystemTick() - start) * 1000.0 / (double) SYSCLOCK_ARM11;
     gFrameGpuMs = C3D_GetDrawingTime();
     gFrameOpen = true;
